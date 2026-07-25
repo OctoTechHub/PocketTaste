@@ -1,8 +1,0 @@
-# PocketTaste API — lightweight, no ML training deps (RecBole lives in ../recsys).
-fastapi==0.115.6
-uvicorn[standard]==0.34.0
-pymongo==4.10.1
-openai==1.59.6
-numpy==2.2.1
-python-dotenv==1.0.1
-pydantic==2.10.4
