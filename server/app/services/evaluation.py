@@ -36,6 +36,8 @@ from app.domain.models import ActivityEvent, ContentItem, ContentProfile, UserPr
 from app.domain.provenance import resolve_provenance
 from app.services.feature_builder import (
     build_co_occurrence,
+    build_segment_transitions,
+    build_transitions,
     build_content_features,
     build_user_profile,
 )
@@ -240,11 +242,24 @@ class EvaluationService:
                 baskets[event.user_id].add(event.content_id)
 
         catalog_by_id = {item.content_id: item for item in catalog}
+        ordered_positives: dict[str, list[str]] = defaultdict(list)
+        for event in train:
+            if event.event_type in POSITIVE_EVENTS and event.content_id:
+                history = ordered_positives[event.user_id]
+                if not history or history[-1] != event.content_id:
+                    history.append(event.content_id)
+        sequences = [seq for seq in ordered_positives.values() if len(seq) > 1]
+        segment_of = {
+            item.content_id: f"{item.primary_genre}/{item.language}" for item in catalog
+        }
+
         return RankingContext(
             catalog=catalog_by_id,
             profiles=profiles,
             features=features,
             co_occurrence=build_co_occurrence([sorted(items) for items in baskets.values()]),
+            transitions=build_transitions(sequences),
+            segment_transitions=build_segment_transitions(sequences, segment_of),
             total_plays=sum(row.plays for row in features.values()),
             provenance=self._provenance(train),
             suppressed=build_suppression_set(catalog_by_id, profiles),

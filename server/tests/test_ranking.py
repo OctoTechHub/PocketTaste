@@ -269,3 +269,66 @@ def test_no_sequence_history_means_no_sequence_signal(ranker, context):
     context.transitions = {"fantasy_a": {"thriller_a": 1.0}}
     result = ranker.recommend(UserProfile(user_id="new"), context, limit=4)
     assert all(item.signals.sequence == 0.0 for item in result.items)
+
+
+# ---------------------------------------------------------------------------
+# Sequence backoff
+# ---------------------------------------------------------------------------
+
+
+def test_segment_transitions_generalise_across_items():
+    """Item pairs are sparse; segment pairs are not. That is the point of the tier."""
+    from app.services.feature_builder import build_segment_transitions
+
+    segment_of = {"a1": "crime/hi", "a2": "crime/hi", "b1": "suspense/hi", "b2": "suspense/hi"}
+    # Two listeners, no shared item pair at all — but the same segment move.
+    transitions = build_segment_transitions([["a1", "b1"], ["a2", "b2"]], segment_of)
+    assert transitions["crime/hi"]["suspense/hi"] == 1.0
+
+
+def test_backoff_fires_when_the_exact_pair_was_never_seen(ranker, context):
+    """The failure this fixes: a listener's own transitions all point at items they
+    have already heard, so an exact lookup returns zero for everything rankable."""
+    user = UserProfile(user_id="u1", recent_sequence=["fantasy_a"], is_cold_start=False)
+    context.transitions = {}                       # no item pair involving fantasy_a
+    context.segment_transitions = {"fantasy/en": {"thriller/en": 0.8}}
+
+    result = ranker.recommend(user, context, limit=4)
+    scores = {item.content_id: item.signals.sequence for item in result.items}
+    assert scores["thriller_a"] > 0.0              # would have been 0.0 before
+    assert scores["romance_a"] == 0.0              # different segment, still nothing
+
+
+def test_exact_transitions_outrank_the_coarser_tiers(ranker, context):
+    """A real observation must beat a generalisation, or the backoff is harmful."""
+    user = UserProfile(user_id="u1", recent_sequence=["fantasy_a"], is_cold_start=False)
+    context.transitions = {"fantasy_a": {"thriller_a": 0.5}}
+    context.segment_transitions = {"fantasy/en": {"romance/hi": 0.5}}
+
+    result = ranker.recommend(user, context, limit=4)
+    scores = {item.content_id: item.signals.sequence for item in result.items}
+    # Same underlying 0.5, but the segment tier is discounted to 0.5x.
+    assert scores["thriller_a"] == 0.5
+    assert scores["romance_a"] == 0.25
+    assert scores["thriller_a"] > scores["romance_a"]
+
+
+def test_content_similarity_tier_bridges_to_unseen_items(ranker, context):
+    """We know fantasy_a -> thriller_a. fantasy_b resembles fantasy_a, so a listener
+    coming from fantasy_a should get partial credit for near-neighbours of the known
+    next item."""
+    user = UserProfile(user_id="u1", recent_sequence=["fantasy_a"], is_cold_start=False)
+    # fantasy_b sits close to fantasy_a in embedding space (see the fixture).
+    context.transitions = {"fantasy_a": {"fantasy_a": 0.0, "romance_a": 0.0, "fantasy_b": 0.9}}
+    context.segment_transitions = {}
+
+    result = ranker.recommend(user, context, limit=4)
+    scores = {item.content_id: item.signals.sequence for item in result.items}
+    assert scores["fantasy_b"] == 0.9              # exact
+    assert scores["romance_a"] == 0.0              # orthogonal embedding, no bridge
+
+
+def test_backoff_still_returns_zero_with_no_history(ranker, context):
+    context.segment_transitions = {"fantasy/en": {"thriller/en": 1.0}}
+    result = ranker.recommend(UserProfile(user_id="new"), context, limit=4)
+    assert all(item.signals.sequence == 0.0 for item in result.items)

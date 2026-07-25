@@ -22,7 +22,11 @@ from app.data.repositories import (
 )
 from app.domain.enums import POSITIVE_EVENTS
 from app.domain.provenance import resolve_provenance
-from app.services.feature_builder import build_co_occurrence, build_transitions
+from app.services.feature_builder import (
+    build_co_occurrence,
+    build_segment_transitions,
+    build_transitions,
+)
 from app.services.ranking import RankingContext, build_suppression_set
 
 logger = get_logger(__name__)
@@ -87,9 +91,13 @@ class RankingContextCache:
         # Order-aware companion to co-occurrence, built from each listener's
         # chronological positive history.
         users = await self._users_repo.list_all()
-        transitions = build_transitions(
-            [profile.recent_sequence for profile in users if len(profile.recent_sequence) > 1]
-        )
+        sequences = [profile.recent_sequence for profile in users if len(profile.recent_sequence) > 1]
+        transitions = build_transitions(sequences)
+        # Coarse backoff tier: item pairs are far too sparse to rely on alone.
+        segment_of = {
+            item.content_id: f"{item.primary_genre}/{item.language}" for item in catalog_items
+        }
+        segment_transitions = build_segment_transitions(sequences, segment_of)
 
         total_plays = sum(row.plays for row in features.values())
         events_total = await self._activity_repo.count()
@@ -119,6 +127,7 @@ class RankingContextCache:
             features=features,
             co_occurrence=co_occurrence,
             transitions=transitions,
+            segment_transitions=segment_transitions,
             total_plays=total_plays,
             provenance=provenance,
             suppressed=suppressed,

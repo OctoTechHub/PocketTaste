@@ -13,6 +13,85 @@ from app.pipelines import databricks
 router = APIRouter(tags=["health"])
 
 
+@router.get("/", tags=["health"], summary="API index — every route, grouped by purpose")
+async def index(container: ContainerDep) -> dict:
+    """A map of the API, so callers do not have to read the OpenAPI schema to find
+    the four or five endpoints they actually need."""
+    return {
+        "service": container.settings.app_name,
+        "version": container.settings.app_version,
+        "docs": "/docs",
+        "start_here": [
+            "POST /auth/login              -> bearer token",
+            "POST /activity                -> log listening (authenticated)",
+            "POST /pipeline/run            -> build features and insights",
+            "POST /me/recommendations      -> personalised results",
+            "GET  /creator/opportunities   -> which genres need more content",
+        ],
+        "routes": {
+            "auth": {
+                "POST /auth/register": "create an account",
+                "POST /auth/login": "sign in, get a bearer token",
+                "GET /auth/me": "the signed-in account",
+                "GET /auth/scheme": "how auth is configured",
+            },
+            "listener": {
+                "POST /activity": "log one event (user comes from the token)",
+                "POST /activity/batch": "log up to 5000",
+                "GET /activity/schema": "event types and interaction weights",
+                "GET /activity/stats": "log volume, real vs simulated",
+                "POST /me/recommendations": "recommendations for the token holder",
+                "GET /me/profile": "your derived taste profile",
+                "GET /me/history": "your own event log",
+            },
+            "recommendations": {
+                "POST /recommendations": "rank for any user id",
+                "GET /recommendations/weights": "published signal weights",
+                "POST /discovery/search": "natural-language search (hybrid retrieval)",
+                "GET /discovery/pipeline": "retrieval topology",
+                "POST /discovery/reindex": "rebuild the search index",
+            },
+            "creator": {
+                "GET /creator/opportunities": "what to write next: write_more vs write_better",
+                "GET /creator/performance": "how your own stories retain",
+                "POST /catalog": "upload a story (screened before storing)",
+                "POST /copilot/outline": "GOAT outline, screened and demand-anchored",
+                "POST /copilot/draft": "GOAT outline plus written scene text",
+                "GET /copilot/engine": "which outlining engine is active",
+            },
+            "originality": {
+                "POST /similarity/check": "screen a draft against the catalog",
+                "GET /similarity/duplicates": "duplicate families already in the catalog",
+                "GET /similarity/audit": "recent screening decisions",
+            },
+            "insights": {
+                "GET /insights/demand": "supply/demand by genre and language",
+                "GET /insights/opportunities": "under-served segments only",
+                "GET /insights/saturation": "over-used narrative patterns",
+                "GET /insights/briefs": "evidence-backed content briefs",
+                "GET /analytics/content/{id}": "retention curve and episode interest",
+                "GET /analytics/content/{id}/drop-off": "plain-English drop-off diagnosis",
+                "GET /analytics/user/{id}": "one listener's derived profile",
+                "GET /analytics/creators/{id}": "one creator's portfolio",
+            },
+            "pipeline": {
+                "POST /pipeline/run": "run the three agents",
+                "GET /pipeline/runs": "run history",
+                "GET /pipeline/describe": "agent roster and stage ordering",
+                "GET /pipeline/scheduler": "background loop status and cost",
+                "POST /pipeline/scheduler/tick": "run one beat now",
+                "GET /pipeline/databricks": "batch-tier job specification",
+                "POST /evaluation/run": "Recall@K / NDCG@K vs baselines",
+                "GET /evaluation/method": "how the evaluation is set up",
+            },
+            "system": {
+                "GET /health": "status and active backends",
+                "GET /system/architecture": "weights, thresholds, what is excluded by design",
+            },
+        },
+    }
+
+
 @router.get("/health", response_model=HealthResponse, summary="Service health and active backends")
 async def health(container: ContainerDep) -> HealthResponse:
     mongo_ok = await container.gateway.ping()

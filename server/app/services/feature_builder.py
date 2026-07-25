@@ -354,6 +354,27 @@ def build_transitions(sequences: list[list[str]]) -> dict[str, dict[str, float]]
     }
 
 
+def build_segment_transitions(
+    sequences: list[list[str]], segment_of: dict[str, str]
+) -> dict[str, dict[str, float]]:
+    """Transitions between (genre, language) segments rather than between items.
+
+    Item-level transitions are hopelessly sparse: with a 100-item catalog there are
+    ~10,000 possible pairs and only a handful are ever observed, so the exact pair you
+    need is almost always unseen. Segment transitions have ~30 x 30 cells and fill up
+    fast — "after crime-detective/hi, listeners go to suspense/hi" is learnable from a
+    few dozen journeys.
+
+    This is the coarse tier of a backoff chain, the same idea as Katz backoff in
+    language models: prefer the specific estimate, fall back to the general one rather
+    than emitting a zero you do not believe.
+    """
+    segment_sequences = [
+        [segment_of[item] for item in sequence if item in segment_of] for sequence in sequences
+    ]
+    return build_transitions(segment_sequences)
+
+
 def build_co_occurrence(baskets: list[list[str]]) -> dict[str, dict[str, float]]:
     """Cosine-normalised item-item co-occurrence from per-user positive baskets.
 

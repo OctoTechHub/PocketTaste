@@ -46,6 +46,8 @@ class RankingContext:
     co_occurrence: dict[str, dict[str, float]]
     #: First-order 'after A comes B' probabilities. Order-aware, unlike co-occurrence.
     transitions: dict[str, dict[str, float]] = field(default_factory=dict)
+    #: Coarse tier of the backoff chain: genre/language -> genre/language.
+    segment_transitions: dict[str, dict[str, float]] = field(default_factory=dict)
     total_plays: int = 0
     provenance: Provenance = Provenance.REAL
     #: Re-uploads suppressed from recommendations. See `build_suppression_set`.
@@ -85,6 +87,9 @@ def build_suppression_set(
 
 #: A neighbour must be at least this similar before it can suppress a later upload.
 _DUPLICATE_SUPPRESSION_SCORE = 0.85
+
+#: Below this cosine, "similar to what usually comes next" is not a real claim.
+_SEQUENCE_SIMILARITY_FLOOR = 0.55
 
 
 class RankingService:
@@ -236,23 +241,68 @@ class RankingService:
         }
         return item, round(sum(contributions.values()), 6), signals, contributions
 
-    @staticmethod
-    def _sequence_signal(user: UserProfile, item: ContentItem, context: RankingContext) -> float:
+    def _sequence_signal(
+        self, user: UserProfile, item: ContentItem, context: RankingContext
+    ) -> float:
         """P(next = item | what this listener just finished), recency-weighted.
 
         Co-occurrence answers "who else liked both". This answers "what usually comes
-        next", which is a different question and the one that matters for serial
-        audio. The most recent step counts fully and older steps decay, because
-        yesterday's listening predicts tomorrow's far better than last month's.
+        next" — a different question, and the one that matters for serial audio.
+
+        **Three-tier backoff**, because the exact item pair is almost never observed.
+        A 100-item catalog has ~10,000 ordered pairs and a handful of listeners
+        produce a few dozen, so a naive lookup returns zero essentially always. Worse,
+        a listener's own transitions point at items they have already heard, and heard
+        items are excluded from recommendations — so with few users the signal is
+        structurally dead. Each tier is discounted by how much it is trusted:
+
+          1.0x  exact item transition       A -> B was actually observed
+          0.8x  content-similar transition  A -> X observed, and B resembles X
+          0.5x  segment transition          crime-detective/hi -> suspense/hi
+
+        Discounting rather than treating them as equal keeps a coarse guess from
+        outranking a real observation.
         """
-        if not user.recent_sequence or not context.transitions:
+        if not user.recent_sequence:
             return 0.0
+        if not context.transitions and not context.segment_transitions:
+            return 0.0
+
+        target_profile = context.profiles.get(item.content_id)
+        target_segment = f"{item.primary_genre}/{item.language}"
         best = 0.0
-        # Walk backwards from the most recent interaction.
+
+        # Walk backwards from the most recent interaction; older steps decay.
         for distance, previous in enumerate(reversed(user.recent_sequence[-5:])):
-            probability = context.transitions.get(previous, {}).get(item.content_id, 0.0)
-            if probability:
-                best = max(best, probability * (0.6**distance))
+            decay = 0.6**distance
+            outgoing = context.transitions.get(previous, {})
+
+            # Tier 1: this exact pair was observed.
+            exact = outgoing.get(item.content_id, 0.0)
+            if exact:
+                best = max(best, exact * decay)
+                continue
+
+            # Tier 2: we know what usually follows `previous`; is this item like it?
+            if target_profile and target_profile.embedding:
+                for observed_next, probability in outgoing.items():
+                    neighbour = context.profiles.get(observed_next)
+                    if not neighbour or not neighbour.embedding:
+                        continue
+                    similarity = cosine(target_profile.embedding, neighbour.embedding)
+                    if similarity >= _SEQUENCE_SIMILARITY_FLOOR:
+                        best = max(best, probability * similarity * decay * 0.8)
+
+            # Tier 3: fall back to where listeners go at the segment level.
+            previous_item = context.catalog.get(previous)
+            if previous_item is not None:
+                previous_segment = f"{previous_item.primary_genre}/{previous_item.language}"
+                segment_probability = context.segment_transitions.get(previous_segment, {}).get(
+                    target_segment, 0.0
+                )
+                if segment_probability:
+                    best = max(best, segment_probability * decay * 0.5)
+
         return round(min(1.0, best), 6)
 
     @staticmethod
