@@ -90,6 +90,18 @@ def test_short_premise_excludes_signals_that_cannot_be_measured():
     assert {"narrative_arc", "semantic", "title", "description"} <= signals
 
 
+def test_a_logline_length_story_can_still_be_checked_for_verbatim_copying():
+    """The live catalog stores loglines, median 98 characters. The floor used to be 60
+    tokens, which switched the copy-paste detector off for nearly every real upload."""
+    logline = make_item(
+        "draft",
+        transcript="Ek unknown number se message aata hai: 'main tumhare theek peeche "
+        "khada hoon.' Rahul peeche mudta hai aur usi pal phone ki battery 0% ho jaati hai.",
+        chapters=0,
+    )
+    assert "lexical_shingle" in applicable_signals(logline)
+
+
 def test_full_upload_uses_every_signal():
     full = make_item("draft", transcript=ORIGINAL_TRANSCRIPT, chapters=6)
     assert applicable_signals(full) == {
@@ -297,6 +309,58 @@ def test_overlapping_ranges_are_still_duplicates(service):
 
     a, b = "Yakshini 1 to 100", "Yakshini 50 to 150"
     assert service._title_signal(normalise_title(a), set(), b, a) == 1.0
+
+
+# ---------------------------------------------------------------------------
+# Verbatim overlap - found by re-uploading a real catalog story under a new title
+# ---------------------------------------------------------------------------
+
+
+def test_a_short_text_copied_into_a_long_one_is_not_hidden_by_the_union():
+    """Jaccard divides by the union, so a logline lifted word for word into a long
+    script scores low purely because the long side adds unshared shingles. Containment
+    asks the question a re-upload check is actually posing."""
+    from app.services.vectors import containment, jaccard, shingles, verbatim_overlap
+
+    short = shingles(
+        "Ek unknown number se message aata hai main tumhare theek peeche khada hoon "
+        "Rahul peeche mudta hai aur usi pal phone ki battery zero percent ho jaati hai"
+    )
+    long = short | shingles(
+        "Uske baad woh apne dost ko phone karta hai lekin line par koi aur hai jo uski "
+        "aawaz mein baat karta hai aur poori raat wahi ek sawaal dohraata rehta hai"
+    )
+    assert jaccard(short, long) < 0.6          # the union hides it
+    assert containment(short, long) == 1.0     # every shingle of the copy is present
+    assert verbatim_overlap(short, long) == 1.0
+
+
+def test_containment_ignores_texts_too_small_to_judge():
+    """Three shared stock phrases must not read as a total copy."""
+    from app.services.vectors import containment, shingles
+
+    assert containment(shingles("he walked into the dark room"), shingles("x " * 400)) == 0.0
+
+
+async def test_an_identical_story_under_a_new_title_and_blurb_is_blocked(service, profiled):
+    """The brief's case: same content inside, different name and description."""
+    catalog, profiles = profiled
+    original = catalog[0]
+    report = await service.screen(
+        SimilarityCandidate(
+            title="Peeche Mat Dekhna - Season 2",
+            description="Ek naye mod par shuru hone wali sabse darawni raat.",
+            transcript=original.transcript,
+            genres=["horror"],
+        ),
+        catalog,
+        profiles,
+        use_llm=False,
+    )
+    assert report.risk is RiskLevel.BLOCK
+    assert report.duplicate_kind is DuplicateKind.EXACT_DUPLICATE
+    assert report.matches[0].content_id == original.content_id
+    assert report.matches[0].signals.lexical_shingle == 1.0
 
 
 def test_a_season_marker_still_collides(service):

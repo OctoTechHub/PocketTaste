@@ -37,7 +37,7 @@ from app.services.content_intelligence import (
     ranges_overlap,
 )
 from app.services.llm import LlmService
-from app.services.vectors import content_tokens, cosine, jaccard, shingles
+from app.services.vectors import content_tokens, cosine, jaccard, shingles, verbatim_overlap
 
 logger = get_logger(__name__)
 
@@ -132,7 +132,13 @@ def _chapter_structure_similarity(left: list[Chapter], right: list[Chapter]) -> 
 
 
 #: A draft needs at least this many content words before verbatim overlap is measurable.
-_MIN_SHINGLE_TOKENS = 60
+#: Twelve tokens yields eight 5-grams, which is enough for the containment test in
+#: `verbatim_overlap` to mean something. This floor used to be 60, chosen with a
+#: full-length script in mind -- but the live catalog stores loglines with a median of
+#: 98 characters (~16 tokens), so 60 switched the verbatim detector off for nearly
+#: every real upload. A byte-identical re-upload of "WhatsApp Se Aayi Maut" under a new
+#: title and blurb was scored `clear` at 0.40 because of it.
+_MIN_SHINGLE_TOKENS = 12
 
 
 def applicable_signals(draft: ContentItem) -> set[str]:
@@ -249,7 +255,7 @@ class SimilarityService:
                     cosine(draft_profile.arc_embedding, profile.arc_embedding) if profile else 0.0
                 ),
                 semantic=cosine(draft_profile.embedding, profile.embedding) if profile else 0.0,
-                lexical_shingle=jaccard(
+                lexical_shingle=verbatim_overlap(
                     draft_shingles, shingles(item.transcript or item.description)
                 ),
                 title=self._title_signal(
