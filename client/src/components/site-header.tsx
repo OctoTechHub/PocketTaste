@@ -1,15 +1,27 @@
 "use client";
 
 import Link from "next/link";
-import { Bell, Search } from "lucide-react";
+import { Bell, LogOut, Search } from "lucide-react";
+import { useState } from "react";
 
 import { cn } from "@/lib/utils";
 import { useScrolled } from "@/hooks/use-scrolled";
+import { useAuth } from "@/hooks/api/use-auth";
+import { AuthDrawer } from "@/components/auth/auth-drawer";
+import { SearchCommand } from "@/components/search/search-command";
 
 const NAV = ["Home", "Series", "Films", "New & Popular", "My List"];
 
 export function SiteHeader() {
   const scrolled = useScrolled();
+  const { account, isAuthenticated, logout } = useAuth();
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [authOpen, setAuthOpen] = useState(false);
+
+  const initial =
+    account?.display_name?.trim()?.[0]?.toUpperCase() ??
+    account?.email?.[0]?.toUpperCase() ??
+    "";
 
   return (
     <header
@@ -39,15 +51,53 @@ export function SiteHeader() {
         </nav>
 
         <div className="ml-auto flex items-center gap-4 text-white">
-          <button type="button" aria-label="Search" className="transition-opacity hover:opacity-70">
+          <button
+            type="button"
+            aria-label="Search"
+            onClick={() => setSearchOpen(true)}
+            className="flex items-center gap-2 transition-opacity hover:opacity-70"
+          >
             <Search className="h-5 w-5" />
+            <kbd className="hidden rounded border border-white/30 px-1.5 py-0.5 text-[10px] text-white/60 lg:inline-block">
+              ⌘K
+            </kbd>
           </button>
+
           <button type="button" aria-label="Notifications" className="transition-opacity hover:opacity-70">
             <Bell className="h-5 w-5" />
           </button>
-          <span className="h-8 w-8 rounded bg-gradient-to-br from-chart-4 to-primary" aria-hidden />
+
+          {isAuthenticated ? (
+            <div className="flex items-center gap-2">
+              <span
+                className="flex h-8 w-8 items-center justify-center rounded bg-gradient-to-br from-chart-4 to-primary text-sm font-bold text-white"
+                title={account?.email}
+              >
+                {initial}
+              </span>
+              <button
+                type="button"
+                aria-label="Sign out"
+                onClick={logout}
+                className="transition-opacity hover:opacity-70"
+              >
+                <LogOut className="h-4 w-4" />
+              </button>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setAuthOpen(true)}
+              className="rounded-full bg-primary px-4 py-1.5 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90"
+            >
+              Sign in
+            </button>
+          )}
         </div>
       </div>
+
+      <SearchCommand open={searchOpen} onOpenChange={setSearchOpen} />
+      <AuthDrawer open={authOpen} onOpenChange={setAuthOpen} />
     </header>
   );
 }

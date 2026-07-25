@@ -1,7 +1,4 @@
-import { notFound } from "next/navigation";
-
-import { getRecommendations, getVideo } from "@/data/queries";
-import { WatchView } from "@/components/watch/watch-view";
+import { WatchScreen } from "@/components/watch/watch-screen";
 
 export default async function WatchPage({
   params,
@@ -9,9 +6,5 @@ export default async function WatchPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const video = getVideo(id);
-  if (!video) notFound();
-
-  const recommendations = getRecommendations(id);
-  return <WatchView video={video} recommendations={recommendations} />;
+  return <WatchScreen id={id} />;
 }

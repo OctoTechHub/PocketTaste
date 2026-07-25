@@ -6,6 +6,7 @@ import { Bell, ChevronLeft, Download, Share2, ThumbsDown, ThumbsUp } from "lucid
 
 import type { ContentItem } from "@/data/content";
 import { cn } from "@/lib/utils";
+import { usePlaybackRef } from "@/hooks/api/use-playback-tracking";
 import { Button } from "@/components/ui/button";
 import { Magnify } from "@/components/magnify";
 import { GlowCard, GlowCardGrid } from "@/components/glow-card-grid";
@@ -37,6 +38,9 @@ export function WatchView({
   const upNext = recommendations.slice(0, 6);
   const more = recommendations.slice(6, 18);
 
+  // Logs play / complete / drop-off for this title to POST /activity.
+  const videoRef = usePlaybackRef(video.id);
+
   return (
     <div className="min-h-screen bg-background text-foreground">
       <SiteHeader />
@@ -59,6 +63,7 @@ export function WatchView({
             >
               <VideoPlayer className="rounded-xl border border-border">
                 <VideoPlayerContent
+                  ref={videoRef}
                   slot="media"
                   src={video.audio}
                   poster={video.wideThumb}
