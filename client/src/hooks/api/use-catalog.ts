@@ -1,12 +1,12 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import type { ContentItem, ContentRow } from "@/data/content";
 import { catalogApi } from "@/lib/api/endpoints";
 import { queryKeys } from "@/lib/api/keys";
 import { contentToItem } from "@/lib/api/mappers";
-import type { CatalogQuery, ContentResponse } from "@/lib/api/types";
+import type { CatalogQuery, ContentCreate, ContentResponse } from "@/lib/api/types";
 
 /** GET /catalog — browse the catalog, mapped to UI ContentItem[]. */
 export function useCatalog(params: CatalogQuery = {}) {
@@ -23,6 +23,32 @@ export function useContent(contentId: string | undefined) {
     queryKey: queryKeys.content(contentId ?? ""),
     queryFn: () => catalogApi.get(contentId as string),
     enabled: Boolean(contentId),
+  });
+}
+
+/** GET /catalog/{id}/transcript — the raw transcript for a story. */
+export function useTranscript(contentId: string | undefined, enabled = true) {
+  return useQuery({
+    queryKey: ["catalog", "transcript", contentId ?? ""],
+    queryFn: () => catalogApi.transcript(contentId as string),
+    enabled: enabled && Boolean(contentId),
+  });
+}
+
+/**
+ * POST /catalog — upload a story. The upload is screened for duplication first
+ * (409 + full similarity report when the gate blocks). The creator is taken
+ * from the token; `creator_id` in the body is ignored server-side.
+ */
+export function useUploadContent() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ body, screen = true }: { body: ContentCreate; screen?: boolean }) =>
+      catalogApi.create(body, screen),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["catalog"] });
+      qc.invalidateQueries({ queryKey: ["creator"] });
+    },
   });
 }
 

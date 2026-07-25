@@ -10,7 +10,11 @@ import { useAuth } from "@/hooks/api/use-auth";
 import { AuthDrawer } from "@/components/auth/auth-drawer";
 import { SearchCommand } from "@/components/search/search-command";
 
-const NAV = ["Home", "Series", "Films", "New & Popular", "My List"];
+const NAV: { label: string; href: string }[] = [
+  { label: "Home", href: "/" },
+  { label: "Creator Studio", href: "/studio" },
+  { label: "Admin", href: "/admin" },
+];
 
 export function SiteHeader() {
   const scrolled = useScrolled();
@@ -40,13 +44,13 @@ export function SiteHeader() {
 
         <nav className="hidden items-center gap-5 text-sm text-white/80 md:flex">
           {NAV.map((item, i) => (
-            <a
-              key={item}
-              href="#"
+            <Link
+              key={item.href}
+              href={item.href}
               className={cn("transition-colors hover:text-white", i === 0 && "font-semibold text-white")}
             >
-              {item}
-            </a>
+              {item.label}
+            </Link>
           ))}
         </nav>
 
