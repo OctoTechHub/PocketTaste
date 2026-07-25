@@ -11,8 +11,11 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class RankingWeights(BaseSettings):
     """Transparent hybrid-ranker weights. Exposed via the API so every score is auditable."""
 
-    affinity: float = 0.30
-    co_occurrence: float = 0.20
+    affinity: float = 0.26
+    co_occurrence: float = 0.14
+    #: Order-aware: "after A, listeners go to B". Carved out of affinity and
+    #: co-occurrence, both of which are order-blind.
+    sequence: float = 0.10
     retention: float = 0.18
     genre_affinity: float = 0.10
     freshness: float = 0.08
@@ -78,6 +81,15 @@ class Settings(BaseSettings):
     access_token_minutes: int = Field(default=60 * 24 * 7, ge=5, le=60 * 24 * 30)
     min_password_length: int = Field(default=8, ge=8, le=128)
 
+    # --- background pipeline ------------------------------------------------
+    #: Run the pipeline on a loop. Only ingestion + insight, and with the LLM off by
+    #: default, so an idle deployment spends nothing.
+    background_pipeline_enabled: bool = Field(default=True, alias="BACKGROUND_PIPELINE_ENABLED")
+    background_pipeline_seconds: int = Field(default=900, ge=30, le=86400)
+    background_pipeline_delay: float = Field(default=20.0, ge=0.0, le=3600.0)
+    #: Turning this on makes the loop spend API credits. Off unless deliberately set.
+    background_pipeline_use_llm: bool = Field(default=False, alias="BACKGROUND_PIPELINE_USE_LLM")
+
     # --- Sarvam AI (optional, Indic-language routing) -----------------------
     sarvam_api_key: str = Field(default="", alias="SARVAM_API_KEY")
     sarvam_base_url: str = "https://api.sarvam.ai/v1"
@@ -87,7 +99,17 @@ class Settings(BaseSettings):
     # --- Databricks (optional batch tier) -----------------------------------
     databricks_host: str = Field(default="", alias="DATABRICKS_HOST")
     databricks_token: str = Field(default="", alias="DATABRICKS_TOKEN")
-    databricks_catalog: str = "pockettaste"
+    #: Must be a catalog that exists in the workspace. Unity Catalog on a fresh
+    #: workspace exposes "workspace"; a dedicated catalog can be created later.
+    databricks_catalog: str = Field(default="workspace", alias="DATABRICKS_CATALOG")
+    databricks_job_name: str = "pockettaste-nightly-intelligence"
+    databricks_cron: str = "0 0 3 * * ?"
+    databricks_timezone: str = "Asia/Kolkata"
+    #: Single-node is deliberate: the batch tasks are IO- and API-bound, not
+    #: Spark-parallel, so workers would idle while still being billed.
+    databricks_node_type: str = Field(default="m5.large", alias="DATABRICKS_NODE_TYPE")
+    databricks_spark_version: str = Field(default="16.4.x-scala2.12", alias="DATABRICKS_SPARK_VERSION")
+    databricks_workspace_base: str = Field(default="", alias="DATABRICKS_WORKSPACE_BASE")
 
     # --- offline fallback ---------------------------------------------------
     fallback_embedding_dimensions: int = Field(default=384, ge=64, le=2048)

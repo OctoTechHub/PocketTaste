@@ -10,6 +10,7 @@ from app.api.routes import (
     auth,
     catalog,
     copilot,
+    creator,
     discovery,
     evaluation,
     health,
@@ -36,5 +37,6 @@ for module in (
     pipeline,
     evaluation,
     copilot,
+    creator,
 ):
     api_router.include_router(module.router)

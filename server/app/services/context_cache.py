@@ -18,10 +18,11 @@ from app.data.repositories import (
     ContentFeaturesRepository,
     ContentProfileRepository,
     ContentRepository,
+    UserProfileRepository,
 )
 from app.domain.enums import POSITIVE_EVENTS
 from app.domain.provenance import resolve_provenance
-from app.services.feature_builder import build_co_occurrence
+from app.services.feature_builder import build_co_occurrence, build_transitions
 from app.services.ranking import RankingContext, build_suppression_set
 
 logger = get_logger(__name__)
@@ -37,6 +38,7 @@ class RankingContextCache:
         profile_repo: ContentProfileRepository,
         features_repo: ContentFeaturesRepository,
         activity_repo: ActivityRepository,
+        users_repo: UserProfileRepository,
         *,
         ttl_seconds: float = DEFAULT_TTL_SECONDS,
     ) -> None:
@@ -45,6 +47,7 @@ class RankingContextCache:
         self._profile_repo = profile_repo
         self._features_repo = features_repo
         self._activity_repo = activity_repo
+        self._users_repo = users_repo
         self._ttl = ttl_seconds
         self._context: RankingContext | None = None
         self._loaded_at: float = 0.0
@@ -81,6 +84,12 @@ class RankingContextCache:
             [event.value for event in POSITIVE_EVENTS]
         )
         co_occurrence = build_co_occurrence([basket["items"] for basket in baskets])
+        # Order-aware companion to co-occurrence, built from each listener's
+        # chronological positive history.
+        users = await self._users_repo.list_all()
+        transitions = build_transitions(
+            [profile.recent_sequence for profile in users if len(profile.recent_sequence) > 1]
+        )
 
         total_plays = sum(row.plays for row in features.values())
         events_total = await self._activity_repo.count()
@@ -109,6 +118,7 @@ class RankingContextCache:
             profiles=profiles,
             features=features,
             co_occurrence=co_occurrence,
+            transitions=transitions,
             total_plays=total_plays,
             provenance=provenance,
             suppressed=suppressed,

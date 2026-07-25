@@ -20,17 +20,6 @@ from __future__ import annotations
 
 from typing import Any
 
-from haystack import Document, component
-from haystack.components.builders import PromptBuilder
-from haystack.components.joiners import DocumentJoiner
-from haystack.components.retrievers.in_memory import (
-    InMemoryBM25Retriever,
-    InMemoryEmbeddingRetriever,
-)
-from haystack.core.pipeline import AsyncPipeline
-from haystack.document_stores.in_memory import InMemoryDocumentStore
-from haystack.document_stores.types import DuplicatePolicy
-
 from app.core.config import Settings
 from app.core.logging import get_logger
 from app.domain.models import ContentItem, ContentProfile
@@ -38,6 +27,58 @@ from app.services.embeddings import EmbeddingService
 from app.services.llm import LlmService
 
 logger = get_logger(__name__)
+
+# Haystack is required for the API's discovery and shortlisting, and deliberately
+# optional everywhere else.
+#
+# The Databricks **serverless** runtime pins numpy 1.26 as a core package. Installing
+# haystack-ai there drags in numpy 2.x, which changes a core dependency and kills the
+# Python kernel outright:
+#
+#     ERROR_CORE_PACKAGE_VERSION_CHANGE ... (numpy: 1.26.4 -> 2.2.1)
+#
+# Downgrading haystack to <2.8 would fix that but cost the API real retrieval
+# features. The batch tasks do not need retrieval at all — an in-memory index built
+# by a job that then exits is pointless, and the all-pairs `similarity_sweep` does
+# not use shortlisting — so the import is guarded and the batch tier simply omits it.
+try:
+    from haystack import Document, component
+    from haystack.components.builders import PromptBuilder
+    from haystack.components.joiners import DocumentJoiner
+    from haystack.components.retrievers.in_memory import (
+        InMemoryBM25Retriever,
+        InMemoryEmbeddingRetriever,
+    )
+    from haystack.core.pipeline import AsyncPipeline
+    from haystack.document_stores.in_memory import InMemoryDocumentStore
+    from haystack.document_stores.types import DuplicatePolicy
+
+    HAYSTACK_AVAILABLE = True
+    HAYSTACK_IMPORT_ERROR: str | None = None
+except Exception as exc:  # noqa: BLE001 - optional outside the API process
+    Document = object  # type: ignore[assignment,misc]
+    HAYSTACK_AVAILABLE = False
+    HAYSTACK_IMPORT_ERROR = f"{type(exc).__name__}: {exc}"
+    logger.warning("Haystack unavailable (%s) — retrieval disabled in this process", HAYSTACK_IMPORT_ERROR)
+
+    class _NoopComponent:
+        """Stand-in for Haystack's `@component`, so the module still imports.
+
+        Mirrors the two shapes the decorator is used in: bare on a class, and
+        `@component.output_types(...)` on its methods.
+        """
+
+        def __call__(self, cls):
+            return cls
+
+        @staticmethod
+        def output_types(**_kwargs):
+            def decorator(function):
+                return function
+
+            return decorator
+
+    component = _NoopComponent()  # type: ignore[assignment]
 
 _ANSWER_TEMPLATE = """A listener asked: "{{ query }}"
 
@@ -53,7 +94,7 @@ the request. Only use the stories listed above. If none genuinely fit, say so.""
 
 
 @component
-class PocketTasteTextEmbedder:
+class PocketTasteTextEmbedder:  # type: ignore[misc]
     """Bridges Haystack to our EmbeddingService so the query and the indexed
     documents are always embedded by the same backend (OpenAI or hash fallback)."""
 
@@ -78,10 +119,20 @@ class DiscoveryService:
         self._settings = settings
         self._embeddings = embeddings
         self._llm = llm
-        self._store = InMemoryDocumentStore(embedding_similarity_function="cosine")
         self._indexed = 0
+        self._available = HAYSTACK_AVAILABLE
+        if not self._available:
+            # Batch processes construct the container but never retrieve. Degrade to
+            # a no-op rather than refusing to build.
+            self._store = None
+            self._retrieval_pipeline = None
+            self._prompt_builder = None
+            return
+        self._store = InMemoryDocumentStore(embedding_similarity_function="cosine")
         self._retrieval_pipeline = self._build_retrieval_pipeline()
-        self._prompt_builder = PromptBuilder(template=_ANSWER_TEMPLATE, required_variables=["query", "documents"])
+        self._prompt_builder = PromptBuilder(
+            template=_ANSWER_TEMPLATE, required_variables=["query", "documents"]
+        )
 
     # --- indexing -----------------------------------------------------------
 
@@ -91,6 +142,9 @@ class DiscoveryService:
 
     def index(self, catalog: list[ContentItem], profiles: dict[str, ContentProfile]) -> int:
         """(Re)build the in-memory index from the catalog and its profiles."""
+        if not self._available:
+            logger.debug("Haystack unavailable; skipping index build")
+            return 0
         documents: list[Document] = []
         for item in catalog:
             profile = profiles.get(item.content_id)
@@ -151,7 +205,18 @@ class DiscoveryService:
         return pipeline
 
     def describe(self) -> dict[str, Any]:
+        if not self._available:
+            return {
+                "available": False,
+                "reason": HAYSTACK_IMPORT_ERROR,
+                "impact": (
+                    "Conversational discovery and similarity shortlisting are disabled in "
+                    "this process. Screening falls back to a full-catalog scan, which is "
+                    "slower but gives the same verdicts."
+                ),
+            }
         return {
+            "available": True,
             "pipeline": "haystack.AsyncPipeline",
             "components": list(self._retrieval_pipeline.graph.nodes),
             "retrievers": ["InMemoryBM25Retriever", "InMemoryEmbeddingRetriever"],
@@ -167,7 +232,7 @@ class DiscoveryService:
         self, query: str, *, top_k: int = 10, language: str | None = None
     ) -> list[Document]:
         """Hybrid BM25 + dense retrieval with reciprocal rank fusion."""
-        if self._indexed == 0:
+        if not self._available or self._indexed == 0:
             return []
         filters = {"field": "meta.language", "operator": "==", "value": language} if language else None
         result = await self._retrieval_pipeline.run_async(
@@ -182,7 +247,7 @@ class DiscoveryService:
 
     async def answer(self, query: str, documents: list[Document]) -> str | None:
         """Grounded generation over the retrieved set. Returns None when no LLM."""
-        if not self._llm.available or not documents:
+        if not self._available or not self._llm.available or not documents:
             return None
         prompt = self._prompt_builder.run(query=query, documents=documents)["prompt"]
         result = await self._llm.complete_text(prompt, max_tokens=400)

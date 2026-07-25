@@ -78,6 +78,11 @@ async def weights(container: ContainerDep) -> dict:
         "signals": {
             "affinity": "cosine between the listener taste vector and the item embedding",
             "co_occurrence": "popularity-normalised item-item co-occurrence over positive baskets",
+            "sequence": (
+                "first-order transition probability P(next=item | recently finished), "
+                "recency-decayed over the listener's last 5 steps. Order-aware, unlike "
+                "co-occurrence."
+            ),
             "retention": "measured quality score: completion, drop-off, re-engagement, replay",
             "genre_affinity": "learned genre affinity blended with language match",
             "freshness": "exponential decay on publication age",

@@ -282,6 +282,14 @@ def build_user_profile(
         re_engagement_score=round(min(1.0, len(sessions) / max(len(interacted), 1)), 4),
         interacted_content_ids=interacted,
         positive_content_ids=positives,
+        # Chronological, most-recent-last, deduped against immediate repeats.
+        recent_sequence=[
+            event.content_id
+            for index, event in enumerate(playback)
+            if event.event_type in POSITIVE_EVENTS
+            and event.content_id
+            and (index == 0 or event.content_id != playback[index - 1].content_id)
+        ][-25:],
         events_observed=len(playback),
         sessions_observed=len(sessions),
         is_cold_start=len(positives) < 2,
@@ -309,6 +317,41 @@ def _infer_pacing(
 # ---------------------------------------------------------------------------
 # Item-item co-occurrence (the collaborative half of the hybrid)
 # ---------------------------------------------------------------------------
+
+
+def build_transitions(sequences: list[list[str]]) -> dict[str, dict[str, float]]:
+    """First-order transition probabilities: after A, how often comes B.
+
+    Co-occurrence is order-blind — it says "these two are listened to by the same
+    people". This says "this one leads to that one", which is a different and
+    stronger claim for serial audio, where listeners move through content in an
+    order that carries intent.
+
+    This is the tractable core of sequential recommendation. A transformer
+    (SASRec/BERT4Rec, e.g. via NVIDIA Merlin's Transformers4Rec) models much longer
+    dependencies and would beat this given GPUs and millions of sequences. A
+    first-order Markov chain needs neither and degrades gracefully on sparse data,
+    which is the regime we are actually in.
+    """
+    counts: dict[str, dict[str, int]] = defaultdict(lambda: defaultdict(int))
+    totals: dict[str, int] = defaultdict(int)
+
+    for sequence in sequences:
+        # Collapse immediate repeats: re-listening to the same story is a replay,
+        # not a transition to something new.
+        collapsed = [item for index, item in enumerate(sequence) if index == 0 or item != sequence[index - 1]]
+        for current, following in zip(collapsed, collapsed[1:]):
+            counts[current][following] += 1
+            totals[current] += 1
+
+    return {
+        source: {
+            target: round(count / totals[source], 6)
+            for target, count in targets.items()
+        }
+        for source, targets in counts.items()
+        if totals[source]
+    }
 
 
 def build_co_occurrence(baskets: list[list[str]]) -> dict[str, dict[str, float]]:

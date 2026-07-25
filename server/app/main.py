@@ -46,6 +46,7 @@ async def lifespan(app: FastAPI):
 
     if connected:
         await container.warm_up()
+        await container.scheduler.start()
     else:
         logger.warning("Running without storage — endpoints that need MongoDB will return 503.")
 
@@ -60,6 +61,7 @@ async def lifespan(app: FastAPI):
     try:
         yield
     finally:
+        await container.scheduler.stop()
         await gateway.close()
 
 

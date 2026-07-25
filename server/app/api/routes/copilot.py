@@ -5,7 +5,8 @@ from __future__ import annotations
 from fastapi import APIRouter
 
 from app.api.deps import ContainerDep, CurrentAccount, StorageDep
-from app.domain.schemas import StoryOutlineRequest
+from app.core.errors import DependencyUnavailableError
+from app.domain.schemas import StoryDraftRequest, StoryOutlineRequest
 
 router = APIRouter(prefix="/copilot", tags=["copilot"])
 
@@ -45,9 +46,52 @@ async def outline(
     }
 
 
+@router.post("/draft", summary="Full GOAT chain: outline AND written scene text")
+async def draft(
+    payload: StoryDraftRequest, container: StorageDep, account: CurrentAccount
+) -> dict:
+    """Runs GOAT all the way to prose.
+
+    `/copilot/outline` stops at the chapter plan. This continues into
+    `split_chapters_into_scenes` and `write_a_scene`, so you get actual text — each
+    scene written with the tail of the previous one in context.
+
+    `goat_trace` in the response lists every upstream GOAT method that ran, in order,
+    with what it produced. Slower and more expensive than `/outline`: one model call
+    per scene.
+    """
+    catalog = await container.content_repo.iter_all(with_transcript=True)
+    profiles = await container.profile_repo.all_by_id()
+    demand = await container.insight_repo.latest()
+
+    try:
+        result = await container.storytelling.draft(
+            premise=payload.premise,
+            working_title=payload.working_title,
+            genre=payload.genre.lower(),
+            language=payload.language.lower(),
+            target_chapters=payload.target_chapters,
+            tone=payload.tone,
+            scenes_to_write=payload.scenes_to_write,
+            creator_id=account.user_id,
+            catalog=catalog,
+            profiles=profiles,
+            demand=demand,
+        )
+    except RuntimeError as exc:
+        raise DependencyUnavailableError(str(exc)) from exc
+    return result
+
+
 @router.get("/engine", summary="Which outlining engine is active")
 async def engine(container: ContainerDep) -> dict:
-    return container.storytelling.describe_engine()
+    return container.storytelling.describe_engine() | {
+        "endpoints": {
+            "POST /copilot/outline": "book spec + three-act plan (fast, ~2-4 model calls)",
+            "POST /copilot/draft": "the above plus scene splitting and written prose "
+            "(one extra model call per scene)",
+        }
+    }
 
 
 @router.get("/guardrails", summary="What the copilot will and will not do")

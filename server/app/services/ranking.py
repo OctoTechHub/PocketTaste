@@ -44,7 +44,9 @@ class RankingContext:
     profiles: dict[str, ContentProfile]
     features: dict[str, ContentFeatures]
     co_occurrence: dict[str, dict[str, float]]
-    total_plays: int
+    #: First-order 'after A comes B' probabilities. Order-aware, unlike co-occurrence.
+    transitions: dict[str, dict[str, float]] = field(default_factory=dict)
+    total_plays: int = 0
     provenance: Provenance = Provenance.REAL
     #: Re-uploads suppressed from recommendations. See `build_suppression_set`.
     suppressed: set[str] = field(default_factory=set)
@@ -214,6 +216,7 @@ class RankingService:
         signals = RecommendationSignals(
             affinity=cosine(user.taste_vector, profile.embedding) if profile and user.taste_vector else 0.0,
             co_occurrence=self._co_occurrence_signal(user, item, context),
+            sequence=self._sequence_signal(user, item, context),
             retention=features.quality_score,
             genre_affinity=self._genre_language_signal(user, item),
             freshness=self._freshness(item),
@@ -224,6 +227,7 @@ class RankingService:
         contributions = {
             "affinity": round(weights.affinity * signals.affinity, 6),
             "co_occurrence": round(weights.co_occurrence * signals.co_occurrence, 6),
+            "sequence": round(weights.sequence * signals.sequence, 6),
             "retention": round(weights.retention * signals.retention, 6),
             "genre_affinity": round(weights.genre_affinity * signals.genre_affinity, 6),
             "freshness": round(weights.freshness * signals.freshness, 6),
@@ -231,6 +235,25 @@ class RankingService:
             "exploration": round(weights.exploration * signals.exploration, 6),
         }
         return item, round(sum(contributions.values()), 6), signals, contributions
+
+    @staticmethod
+    def _sequence_signal(user: UserProfile, item: ContentItem, context: RankingContext) -> float:
+        """P(next = item | what this listener just finished), recency-weighted.
+
+        Co-occurrence answers "who else liked both". This answers "what usually comes
+        next", which is a different question and the one that matters for serial
+        audio. The most recent step counts fully and older steps decay, because
+        yesterday's listening predicts tomorrow's far better than last month's.
+        """
+        if not user.recent_sequence or not context.transitions:
+            return 0.0
+        best = 0.0
+        # Walk backwards from the most recent interaction.
+        for distance, previous in enumerate(reversed(user.recent_sequence[-5:])):
+            probability = context.transitions.get(previous, {}).get(item.content_id, 0.0)
+            if probability:
+                best = max(best, probability * (0.6**distance))
+        return round(min(1.0, best), 6)
 
     @staticmethod
     def _co_occurrence_signal(user: UserProfile, item: ContentItem, context: RankingContext) -> float:
@@ -342,6 +365,7 @@ class RankingService:
         phrases = {
             "affinity": f"matches your listening taste ({signals.affinity:.2f} similarity)",
             "co_occurrence": f"listeners with your history also finished it ({signals.co_occurrence:.2f})",
+            "sequence": f"commonly the next listen after what you just finished ({signals.sequence:.2f})",
             "retention": f"strong retention across listeners ({signals.retention:.2f})",
             "genre_affinity": f"in a genre and language you return to ({signals.genre_affinity:.2f})",
             "freshness": f"recently published ({signals.freshness:.2f} freshness)",

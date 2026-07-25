@@ -206,3 +206,66 @@ def test_suppressed_items_are_excluded_from_ranking_and_counted(ranker, context)
 
     unfiltered = ranker.recommend(UserProfile(user_id="u1"), context, limit=10, include_duplicates=True)
     assert "fantasy_b" in {item.content_id for item in unfiltered.items}
+
+
+# ---------------------------------------------------------------------------
+# Sequential behaviour
+# ---------------------------------------------------------------------------
+
+
+def test_transitions_capture_order_not_just_co_occurrence():
+    """Co-occurrence says 'both were liked'. Transitions say 'this led to that'."""
+    from app.services.feature_builder import build_co_occurrence, build_transitions
+
+    sequences = [["a", "b", "c"], ["a", "b", "d"], ["a", "b", "c"]]
+    transitions = build_transitions(sequences)
+
+    assert transitions["a"]["b"] == 1.0                 # a always leads to b
+    assert round(transitions["b"]["c"], 4) == 0.6667    # b -> c twice out of three
+    assert round(transitions["b"]["d"], 4) == 0.3333
+    assert "a" not in transitions.get("b", {})          # direction matters
+
+    # Co-occurrence is symmetric; transitions are not. That is the whole point.
+    co = build_co_occurrence(sequences)
+    assert co["a"]["b"] == co["b"]["a"]
+
+
+def test_transitions_ignore_immediate_repeats():
+    from app.services.feature_builder import build_transitions
+
+    assert build_transitions([["a", "a", "a", "b"]])["a"] == {"b": 1.0}
+
+
+def test_sequence_signal_favours_the_usual_next_listen(ranker, context):
+    user = UserProfile(
+        user_id="u1",
+        recent_sequence=["fantasy_a"],
+        positive_content_ids=["fantasy_a"],
+        is_cold_start=False,
+    )
+    context.transitions = {"fantasy_a": {"thriller_a": 0.9, "romance_a": 0.1}}
+    result = ranker.recommend(user, context, limit=4)
+    scores = {item.content_id: item.signals.sequence for item in result.items}
+    assert scores["thriller_a"] > scores["romance_a"]
+    assert scores["fantasy_b"] == 0.0
+
+
+def test_sequence_signal_decays_with_distance(ranker, context):
+    """The step you just took predicts better than one five listens ago."""
+    recent = UserProfile(user_id="u1", recent_sequence=["fantasy_a"], is_cold_start=False)
+    distant = UserProfile(
+        user_id="u2",
+        recent_sequence=["fantasy_a", "fantasy_b", "romance_a"],
+        is_cold_start=False,
+    )
+    context.transitions = {"fantasy_a": {"thriller_a": 1.0}}
+
+    near = next(i for i in ranker.recommend(recent, context, limit=4).items if i.content_id == "thriller_a")
+    far = next(i for i in ranker.recommend(distant, context, limit=4).items if i.content_id == "thriller_a")
+    assert near.signals.sequence > far.signals.sequence
+
+
+def test_no_sequence_history_means_no_sequence_signal(ranker, context):
+    context.transitions = {"fantasy_a": {"thriller_a": 1.0}}
+    result = ranker.recommend(UserProfile(user_id="new"), context, limit=4)
+    assert all(item.signals.sequence == 0.0 for item in result.items)

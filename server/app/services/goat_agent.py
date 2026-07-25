@@ -187,6 +187,108 @@ class GoatStorytellingEngine:
         _, scene_plan = agent.split_chapters_into_scenes(plan)
         return {"plan": scene_plan, "model_calls": agent.calls}
 
+    async def write_draft(
+        self,
+        topic: str,
+        *,
+        form: str = "audio series",
+        scenes_to_write: int = 3,
+        enhance: bool = False,
+    ) -> dict:
+        """The full GOAT chain, ending in actual prose.
+
+        `build_plan` stops at the outline. This goes the rest of the way:
+        split each chapter into scenes, then write the opening scenes as real text.
+        Scene writing is where GOAT's continuity handling earns its keep — each scene
+        is generated with the tail of the previous one in context, which is why the
+        prose does not read as a set of disconnected fragments.
+        """
+        if not self.available:
+            raise RuntimeError("GOAT storytelling engine is not available.")
+        return await asyncio.to_thread(
+            self._write_draft_blocking, topic, form, scenes_to_write, enhance
+        )
+
+    def _write_draft_blocking(
+        self, topic: str, form: str, scenes_to_write: int, enhance: bool
+    ) -> dict:
+        agent = self._agent(form)
+        trace: list[dict] = []
+
+        def step(name: str, note: str) -> None:
+            trace.append({"goat_method": name, "result": note, "calls_so_far": agent.calls})
+
+        _, spec_text = agent.init_book_spec(topic)
+        spec = agent.parse_book_spec(spec_text)
+        step("init_book_spec", f"{len([v for v in spec.values() if v])} spec fields populated")
+
+        _, plan = agent.create_plot_chapters(spec_text)
+        step("create_plot_chapters", f"{len(plan)} acts parsed by Plan.parse_text_plan")
+
+        if enhance and plan:
+            try:
+                _, plan = agent.enhance_plot_chapters(spec_text, plan)
+                step("enhance_plot_chapters", "acts refined")
+            except Exception:  # noqa: BLE001 - refinement is optional
+                logger.exception("GOAT enhance_plot_chapters failed; keeping the base plan")
+
+        scenes_written: list[dict] = []
+        if plan:
+            try:
+                _, plan = agent.split_chapters_into_scenes(plan)
+                total = sum(
+                    len(scenes)
+                    for act in plan
+                    for scenes in act.get("chapter_scenes", {}).values()
+                )
+                step("split_chapters_into_scenes", f"{total} scene descriptions")
+                scenes_written = self._write_scenes(agent, plan, scenes_to_write, step)
+            except Exception:  # noqa: BLE001 - keep the outline even if prose fails
+                logger.exception("GOAT scene stage failed; returning the outline only")
+
+        return {
+            "spec": spec,
+            "plan": plan,
+            "scenes": scenes_written,
+            "trace": trace,
+            "model_calls": agent.calls,
+        }
+
+    @staticmethod
+    def _write_scenes(agent, plan: list, limit: int, step) -> list[dict]:
+        """Write the first `limit` scenes in reading order, threading continuity."""
+        written: list[dict] = []
+        previous: str | None = None
+
+        for act in plan:
+            for chapter_number in sorted(act.get("chapter_scenes", {})):
+                for scene_index, description in enumerate(
+                    act["chapter_scenes"][chapter_number], start=1
+                ):
+                    if len(written) >= limit:
+                        return written
+                    _, text = agent.write_a_scene(
+                        description, scene_index, chapter_number, plan, previous_scene=previous
+                    )
+                    if not text:
+                        continue
+                    written.append(
+                        {
+                            "chapter": chapter_number,
+                            "scene": scene_index,
+                            "description": description[:400],
+                            "text": text,
+                            "words": len(text.split()),
+                            "continued_from_previous": previous is not None,
+                        }
+                    )
+                    previous = text
+                    step(
+                        "write_a_scene",
+                        f"ch{chapter_number} sc{scene_index}: {len(text.split())} words",
+                    )
+        return written
+
 
 def _clean(text: str) -> str:
     """GOAT chapter text carries markdown emphasis and heading marks; strip them."""

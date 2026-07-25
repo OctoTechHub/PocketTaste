@@ -60,6 +60,36 @@ async def describe(container: ContainerDep) -> dict:
     }
 
 
+@router.get("/scheduler", summary="Background pipeline status and cost")
+async def scheduler_status(container: ContainerDep) -> dict:
+    """The loop runs ingestion + insight only, with the LLM off, and skips entirely
+    when no new events have arrived — so an idle deployment spends nothing."""
+    return container.scheduler.describe()
+
+
+@router.post("/scheduler/tick", summary="Run one scheduler beat now")
+async def scheduler_tick(
+    container: StorageDep,
+    force: bool = Query(default=False, description="Run even if no new events arrived."),
+) -> dict:
+    """Useful for testing the loop without waiting for the interval."""
+    return await container.scheduler.tick(force=force)
+
+
+@router.post("/scheduler/stop", summary="Stop the background loop")
+async def scheduler_stop(container: ContainerDep) -> dict:
+    await container.scheduler.stop()
+    container.scheduler.state.enabled = False
+    return {"stopped": True} | container.scheduler.describe()
+
+
+@router.post("/scheduler/start", summary="Start the background loop")
+async def scheduler_start(container: ContainerDep) -> dict:
+    container.settings.background_pipeline_enabled = True
+    await container.scheduler.start()
+    return {"started": True} | container.scheduler.describe()
+
+
 @router.get("/databricks", summary="Batch-tier job specification")
 async def databricks_spec(container: ContainerDep) -> dict:
     return databricks.describe(container.settings)

@@ -277,6 +277,19 @@ class StoryOutlineRequest(ApiModel):
     tone: str = Field(default="", max_length=80)
 
 
+class StoryDraftRequest(ApiModel):
+    """Outline *and* written scene text, via the full GOAT chain."""
+
+    premise: str = Field(min_length=10, max_length=2000)
+    working_title: str = Field(default="", max_length=200)
+    genre: str = Field(default="fantasy", max_length=40)
+    language: str = Field(default="en", max_length=8)
+    target_chapters: int = Field(default=8, ge=3, le=40)
+    tone: str = Field(default="", max_length=80)
+    #: Each scene is a separate model call, so this is the main cost dial.
+    scenes_to_write: int = Field(default=2, ge=1, le=10)
+
+
 class ChapterBeat(ApiModel):
     index: int
     title: str

@@ -171,6 +171,112 @@ class StorytellingService:
             ),
         }
 
+    # --- full draft (outline + written prose) -------------------------------
+
+    async def draft(
+        self,
+        *,
+        premise: str,
+        working_title: str,
+        genre: str,
+        language: str,
+        target_chapters: int,
+        tone: str,
+        scenes_to_write: int,
+        creator_id: str,
+        catalog: list[ContentItem],
+        profiles: dict[str, ContentProfile],
+        demand: DemandReport | None,
+    ) -> dict:
+        """Screen, then run GOAT all the way to actual scene text.
+
+        The difference from `outline()` is the last two stages: GOAT splits chapters
+        into scenes and writes them as prose, each scene seeing the tail of the one
+        before it.
+        """
+        screening = await self._similarity.screen(
+            SimilarityCandidate(
+                title=working_title or premise[:60],
+                description=premise,
+                transcript=premise,
+                language=language,
+                genres=[genre],
+                creator_id=creator_id,
+            ),
+            catalog,
+            profiles,
+            top_k=3,
+            use_llm=self._llm.available,
+        )
+        demand_context = self._demand_context(genre, language, demand)
+
+        if screening.risk is RiskLevel.BLOCK:
+            return self._blocked_response(working_title, premise, screening, demand_context) | {
+                "scenes": [],
+                "trace": [],
+            }
+
+        if not self._goat.available:
+            raise RuntimeError(
+                "Scene writing requires the GOAT engine. "
+                f"{self._goat.describe()['import_error'] or 'No LLM configured.'}"
+            )
+
+        topic = self._compose_topic(
+            premise, genre, language, tone, target_chapters, self._avoid_patterns(demand)
+        )
+        result = await self._goat.write_draft(
+            topic,
+            form=f"{language} {genre} audio series",
+            scenes_to_write=scenes_to_write,
+            enhance=target_chapters > 8,
+        )
+
+        spec = result["spec"]
+        return {
+            "working_title": working_title or spec.get("Premise", premise)[:80],
+            "logline": spec.get("Premise", "")[:400],
+            "setting": " | ".join(
+                part for part in (spec.get("Place", ""), spec.get("Time", "")) if part
+            ),
+            "characters": self._parse_goat_characters(spec.get("Characters", "")),
+            "chapters": flatten_chapters(result["plan"]),
+            "scenes": result["scenes"],
+            "engine": {
+                "name": "goat_storytelling_agent",
+                "goat_used": True,
+                "upstream": "https://github.com/GOAT-AI-lab/GOAT-Storytelling-Agent",
+                "backend": self._goat.describe()["backend"],
+                "book_spec": spec,
+                "model_calls": result["model_calls"],
+                "scenes_written": len(result["scenes"]),
+                "words_written": sum(scene["words"] for scene in result["scenes"]),
+            },
+            # Exactly which upstream methods ran, in order, with what each produced.
+            "goat_trace": result["trace"],
+            "originality": {
+                "risk": screening.risk.value,
+                "originality_score": screening.originality_score,
+                "top_similarity": screening.top_score,
+                "duplicate_kind": screening.duplicate_kind.value,
+                "closest_matches": [
+                    {
+                        "content_id": match.content_id,
+                        "title": match.title,
+                        "combined_score": match.combined_score,
+                    }
+                    for match in screening.matches
+                ],
+                "explanation": screening.explanation,
+            },
+            "demand_context": demand_context,
+            "generated_by": "goat_storytelling_agent",
+            "notice": (
+                "Generated draft text. Not fact-checked or edited, and the originality "
+                "block compares against this catalog only."
+            ),
+        }
+
     # --- GOAT path ----------------------------------------------------------
 
     async def _outline_with_goat(

@@ -41,6 +41,7 @@ from app.services.goat_agent import GoatStorytellingEngine
 from app.services.explanation import ExplanationService
 from app.services.llm import LlmService
 from app.services.ranking import RankingService
+from app.services.scheduler import PipelineScheduler
 from app.services.similarity import SimilarityService
 from app.services.storytelling import StorytellingService
 
@@ -82,6 +83,7 @@ class Container:
 
     # orchestration
     orchestrator: PipelineOrchestrator
+    scheduler: PipelineScheduler
 
     async def warm_up(self) -> None:
         """Build the Haystack index from whatever is already persisted."""
@@ -122,7 +124,9 @@ def build_container(settings: Settings, gateway: MongoGateway) -> Container:
         settings, content_repo, profile_repo, similarity_audit_repo, similarity, discovery
     )
     activity_service = ActivityService(content_repo, activity_repo)
-    cache = RankingContextCache(settings, content_repo, profile_repo, features_repo, activity_repo)
+    cache = RankingContextCache(
+        settings, content_repo, profile_repo, features_repo, activity_repo, users_repo
+    )
 
     orchestrator = PipelineOrchestrator(
         content_intelligence=ContentIntelligenceAgent(
@@ -137,6 +141,8 @@ def build_container(settings: Settings, gateway: MongoGateway) -> Container:
         runs_repo=runs_repo,
         cache=cache,
     )
+
+    scheduler = PipelineScheduler(settings, orchestrator, activity_repo)
 
     return Container(
         settings=settings,
@@ -166,4 +172,5 @@ def build_container(settings: Settings, gateway: MongoGateway) -> Container:
         activity_service=activity_service,
         cache=cache,
         orchestrator=orchestrator,
+        scheduler=scheduler,
     )

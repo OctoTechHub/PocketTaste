@@ -249,7 +249,59 @@ The same data is available as JSON at `GET /insights/opportunities`.
 
 ---
 
-## 6. Everything else
+## 6. Background pipeline (continuous, zero AI spend)
+
+The pipeline is batch by nature — profiles are rebuilt from the log, not updated per
+event — so it runs on a loop rather than waiting to be triggered.
+
+```bash
+GET  /pipeline/scheduler        # status, and exactly what it costs
+POST /pipeline/scheduler/tick   # run one beat now (?force=true to ignore the skip)
+POST /pipeline/scheduler/stop   # / start
+```
+
+**How it costs nothing**, two rules:
+
+1. `use_llm=False`, and only `ingestion` + `insight` run. Both are pure computation
+   over data already in Mongo. Insight falls back to its deterministic brief writer,
+   disclosed as `heuristic` exactly as always.
+2. **It skips when nothing changed.** Each tick compares the event count against the
+   last run. No new events, no work — an idle deployment does one
+   `count_documents` per interval and stops.
+
+`content_intelligence` — the only stage that embeds and labels, and so the only one
+that spends money — is **excluded on purpose**. New uploads get profiled by an
+explicit `POST /pipeline/run` or by the Databricks batch tier. A loop should never be
+able to run up a bill on its own.
+
+```
+BACKGROUND_PIPELINE_ENABLED=true     # default
+BACKGROUND_PIPELINE_SECONDS=900      # 15 min
+BACKGROUND_PIPELINE_USE_LLM=false    # turning this on WILL spend credits
+```
+
+---
+
+## 7. Creator APIs — "what should I write?"
+
+```bash
+GET /creator/opportunities   # demand gaps, ranked for you
+GET /creator/performance     # how your own stories are retaining
+```
+
+`/creator/opportunities` splits the answer in two, because they need different work:
+
+- **`write_more`** — demand outruns supply. The audience is there and under-served.
+- **`write_better`** — demand is met in volume but drop-off is high. More of the same
+  will not help; the existing execution is losing people.
+
+Segments you already publish in are marked, since extending a shelf you own is a
+different bet from entering a new one. Over-supplied narrative patterns come back as
+`avoid_patterns`.
+
+---
+
+## 8. Everything else
 
 ```bash
 POST /discovery/search      # natural-language search (works in Hinglish)
@@ -261,7 +313,7 @@ GET  /system/architecture   # weights, thresholds, what is excluded by design
 
 ---
 
-## 7. How Databricks is used
+## 9. How Databricks is used
 
 **Short version: it is the batch tier, and it is deliberately not in the request
 path.** The API never calls Databricks. If the workspace is down, unreachable, or
@@ -311,41 +363,38 @@ rebuild_clusters ────┘
 
 Schedule: `0 0 3 * * ?` Asia/Kolkata (nightly, 3am).
 
-### Submitting it
+### Deploying it — actually deployed
 
-Nothing submits the job automatically — that is a deliberate boundary, so a
-misconfigured workspace can never take the API down. To deploy it:
-
-```bash
-# 1. get the spec
-curl -s http://127.0.0.1:8000/pipeline/databricks | jq '.job_spec' > job.json
-
-# 2. create the job in your workspace
-curl -X POST "$DATABRICKS_HOST/api/2.1/jobs/create" \
-  -H "Authorization: Bearer $DATABRICKS_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d @job.json
+```powershell
+.\.venv\Scripts\python.exe -m scripts.deploy_databricks              # dry run
+.\.venv\Scripts\python.exe -m scripts.deploy_databricks --apply      # upload + create job
+.\.venv\Scripts\python.exe -m scripts.deploy_databricks --status     # job + recent runs
 ```
 
-The task scripts it references (`dbfs:/pockettaste/jobs/*.py`) are **not written
-yet** — the spec is the contract for them, not a claim that they exist. Each one is
-the corresponding in-process agent stage pointed at Delta instead of Mongo.
+The deployer uploads `app/` and `databricks/jobs/` into the workspace, stores the
+Mongo URI and OpenAI key in a Databricks secret scope, and creates the job. The
+tasks import the **same service code the API runs** — two implementations of a
+retention curve would drift and then nobody could say which number was right.
 
-Configure with:
+**Current state: deployed and green.** All five tasks succeeded in ~160s, writing
+`workspace.pockettaste.{content_profiles, content_clusters, content_features,
+evaluation_runs}`.
 
-```
-DATABRICKS_HOST=https://<workspace>.cloud.databricks.com
-DATABRICKS_TOKEN=<pat>
-DATABRICKS_CATALOG=pockettaste
-```
+Four things this workspace forced, all handled in code:
 
-Without these, `/pipeline/databricks` still returns a valid, deployable spec and
-reports `configured: false`. It is an artifact, not a live integration, and it says
-so in `status_note`.
+| what happened | fix |
+|---|---|
+| `Only serverless compute is supported` | the deployer detects the refusal and retries with a serverless job spec (`environments` instead of `job_clusters`) |
+| `ERROR_CORE_PACKAGE_VERSION_CHANGE (numpy 1.26.4 -> 2.2.1)` | `haystack-ai` declares unpinned `numpy`, so pip pulled 2.x over a runtime core package and killed the kernel. Haystack is now an **optional import** and omitted from the batch tier — the batch tasks never retrieve, so nothing is lost, and the API keeps Haystack 2.31 |
+| `asyncio.run() cannot be called from a running event loop` | serverless executes inside a live loop; tasks now run their coroutine on a worker thread with its own loop |
+| `{{secrets/...}}` arriving as a literal string | serverless `spark_python_task` does not interpolate secret refs in `parameters`; tasks resolve them via `dbutils.secrets` instead |
+
+`SystemExit(0)` is also avoided — inside Databricks' IPython kernel even a zero exit
+registers as a task failure.
 
 ---
 
-## 8. Tests
+## 10. Tests
 
 ```powershell
 .\.venv\Scripts\python.exe -m pytest

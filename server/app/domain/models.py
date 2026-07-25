@@ -254,6 +254,9 @@ class UserProfile(DomainModel):
     re_engagement_score: float = 0.0
     interacted_content_ids: list[str] = Field(default_factory=list)
     positive_content_ids: list[str] = Field(default_factory=list)
+    #: Most-recent-last ordered positive history. Order is the signal a bag-of-items
+    #: taste vector throws away.
+    recent_sequence: list[str] = Field(default_factory=list)
     events_observed: int = 0
     sessions_observed: int = 0
     is_cold_start: bool = True
@@ -318,6 +321,7 @@ class SimilarityReport(DomainModel):
 class RecommendationSignals(DomainModel):
     affinity: float = 0.0
     co_occurrence: float = 0.0
+    sequence: float = 0.0
     retention: float = 0.0
     genre_affinity: float = 0.0
     freshness: float = 0.0
