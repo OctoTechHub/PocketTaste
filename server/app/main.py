@@ -62,6 +62,7 @@ async def lifespan(app: FastAPI):
         yield
     finally:
         await container.scheduler.stop()
+        await container.aclose()
         await gateway.close()
 
 

@@ -94,9 +94,24 @@ class LlmService:
             "available": self.available,
         }
 
-    def _route(self, language: str | None) -> tuple[AsyncOpenAI | None, str]:
+    def _route(self, language: str | None, provider: str | None = None) -> tuple[AsyncOpenAI | None, str]:
         """Indic languages go to Sarvam when configured. Otherwise prefer Databricks
-        (included in the workspace) over OpenAI (metered)."""
+        (included in the workspace) over OpenAI (metered).
+
+        `provider`, when given, pins the call to one backend regardless of language —
+        used by the Sarvam finishing stage, which wants Sarvam specifically rather than
+        whatever the language-based heuristic would pick.
+        """
+        if provider == "sarvam":
+            return (self._sarvam, self._settings.sarvam_model) if self._sarvam else (None, "none")
+        if provider == "openai":
+            return (self._openai, self._settings.llm_model) if self._openai else (None, "none")
+        if provider == "databricks":
+            return (
+                (self._databricks, self._settings.databricks_llm_model)
+                if self._databricks
+                else (None, "none")
+            )
         if language and self._sarvam and language.lower() in self._settings.sarvam_languages:
             return self._sarvam, self._settings.sarvam_model
         if self._databricks:
@@ -114,12 +129,13 @@ class LlmService:
         prompt: str,
         *,
         language: str | None = None,
+        provider: str | None = None,
         system: str = GROUNDING_RULES,
         max_tokens: int = 900,
         temperature: float = 0.2,
     ) -> LlmResult:
         """Ask for a strict JSON object. Returns ok=False rather than raising."""
-        client, model = self._route(language)
+        client, model = self._route(language, provider)
         if client is None or self._degraded:
             return LlmResult(text="", source=LabelSource.HEURISTIC, error="llm_unavailable")
         try:
@@ -153,11 +169,12 @@ class LlmService:
         prompt: str,
         *,
         language: str | None = None,
+        provider: str | None = None,
         system: str = GROUNDING_RULES,
         max_tokens: int = 500,
         temperature: float = 0.3,
     ) -> LlmResult:
-        client, model = self._route(language)
+        client, model = self._route(language, provider)
         if client is None or self._degraded:
             return LlmResult(text="", source=LabelSource.HEURISTIC, error="llm_unavailable")
         try:

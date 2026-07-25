@@ -77,6 +77,8 @@ async def draft(
             catalog=catalog,
             profiles=profiles,
             demand=demand,
+            localize_to=payload.localize_to.lower() if payload.localize_to else None,
+            narrate=payload.narrate,
         )
     except RuntimeError as exc:
         raise DependencyUnavailableError(str(exc)) from exc
@@ -90,7 +92,8 @@ async def engine(container: ContainerDep) -> dict:
             "POST /copilot/outline": "book spec + three-act plan (fast, ~2-4 model calls)",
             "POST /copilot/draft": "the above plus scene splitting and written prose "
             "(one extra model call per scene)",
-        }
+        },
+        "finishing_stage": container.sarvam_finishing.describe(),
     }
 
 
@@ -103,6 +106,10 @@ async def guardrails(container: ContainerDep) -> dict:
         "generation_available": container.llm.available,
         "outline_engine": container.storytelling.describe_engine(),
         "language_routing": container.llm.describe(),
+        "finishing_stage": container.sarvam_finishing.describe() | {
+            "runs_on": "POST /copilot/draft only, after the similarity gate clears",
+            "steps": ["polish (same language)", "localize (localize_to)", "narrate (narrate=true)"],
+        },
         "limits": [
             "Generated text is a drafting aid, not publishable copy.",
             "The originality block reflects the current catalog only — it is not a search of "

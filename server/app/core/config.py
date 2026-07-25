@@ -93,8 +93,19 @@ class Settings(BaseSettings):
     # --- Sarvam AI (optional, Indic-language routing) -----------------------
     sarvam_api_key: str = Field(default="", alias="SARVAM_API_KEY")
     sarvam_base_url: str = "https://api.sarvam.ai/v1"
-    sarvam_model: str = "sarvam-m"
+    #: "sarvam-m" was retired by the provider; verified live against the API on
+    #: 2026-07-26 that "sarvam-30b" is current. It is a reasoning model — see
+    #: `LlmService` for why max_tokens must budget for reasoning_content too.
+    sarvam_model: str = "sarvam-30b"
     sarvam_languages: list[str] = Field(default_factory=lambda: ["hi", "ta", "te", "bn", "mr", "kn", "gu"])
+    #: Sarvam's Translate and Text-to-Speech APIs are native REST endpoints, not
+    #: OpenAI-compatible, so they are called directly against this host rather than
+    #: through `sarvam_base_url` (which is only the chat-completions path).
+    sarvam_api_base: str = "https://api.sarvam.ai"
+    #: "meera" was retired by the provider; verified live against the API on
+    #: 2026-07-26 that "anushka" is a currently accepted speaker.
+    sarvam_tts_speaker: str = "anushka"
+    sarvam_tts_model: str = "bulbul:v2"
 
     # --- Databricks (optional batch tier) -----------------------------------
     databricks_host: str = Field(default="", alias="DATABRICKS_HOST")

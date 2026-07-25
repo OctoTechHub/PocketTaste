@@ -28,6 +28,7 @@ from app.domain.enums import RiskLevel
 from app.domain.models import ContentItem, ContentProfile, DemandReport, SimilarityReport
 from app.services.goat_agent import GoatStorytellingEngine, flatten_chapters
 from app.services.llm import LlmService
+from app.services.sarvam_finishing import SarvamFinishingService
 from app.services.similarity import SimilarityCandidate, SimilarityService
 
 logger = get_logger(__name__)
@@ -80,11 +81,13 @@ class StorytellingService:
         llm: LlmService,
         similarity: SimilarityService,
         goat: GoatStorytellingEngine,
+        sarvam: SarvamFinishingService,
     ) -> None:
         self._settings = settings
         self._llm = llm
         self._similarity = similarity
         self._goat = goat
+        self._sarvam = sarvam
 
     def describe_engine(self) -> dict:
         return self._goat.describe()
@@ -187,12 +190,18 @@ class StorytellingService:
         catalog: list[ContentItem],
         profiles: dict[str, ContentProfile],
         demand: DemandReport | None,
+        localize_to: str | None = None,
+        narrate: bool = False,
     ) -> dict:
         """Screen, then run GOAT all the way to actual scene text.
 
         The difference from `outline()` is the last two stages: GOAT splits chapters
         into scenes and writes them as prose, each scene seeing the tail of the one
         before it.
+
+        A Sarvam AI finishing stage runs last, only on scenes that cleared the
+        similarity gate: a same-language polish pass, optional translation into an
+        Indic language (`localize_to`), and optional TTS narration (`narrate`).
         """
         screening = await self._similarity.screen(
             SimilarityCandidate(
@@ -214,6 +223,7 @@ class StorytellingService:
             return self._blocked_response(working_title, premise, screening, demand_context) | {
                 "scenes": [],
                 "trace": [],
+                "finishing": {"available": self._sarvam.available, "reason": "blocked_before_generation"},
             }
 
         if not self._goat.available:
@@ -233,6 +243,13 @@ class StorytellingService:
         )
 
         spec = result["spec"]
+        scene_text = "\n\n".join(scene["text"] for scene in result["scenes"] if scene.get("text"))
+        finishing = await self._sarvam.finish(
+            scene_text,
+            source_language=language,
+            target_language=localize_to,
+            narrate=narrate,
+        )
         return {
             "working_title": working_title or spec.get("Premise", premise)[:80],
             "logline": spec.get("Premise", "")[:400],
@@ -242,6 +259,7 @@ class StorytellingService:
             "characters": self._parse_goat_characters(spec.get("Characters", "")),
             "chapters": flatten_chapters(result["plan"]),
             "scenes": result["scenes"],
+            "finishing": finishing,
             "engine": {
                 "name": "goat_storytelling_agent",
                 "goat_used": True,

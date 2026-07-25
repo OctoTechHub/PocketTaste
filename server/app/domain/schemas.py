@@ -288,6 +288,13 @@ class StoryDraftRequest(ApiModel):
     tone: str = Field(default="", max_length=80)
     #: Each scene is a separate model call, so this is the main cost dial.
     scenes_to_write: int = Field(default=2, ge=1, le=10)
+    #: Sarvam AI finishing stage, run after the similarity gate clears. Both optional.
+    #: ISO code of an Indic language (hi, ta, te, bn, mr, kn, gu, ml, pa, od) to
+    #: translate the cleared draft into via Sarvam's Translate API.
+    localize_to: str | None = Field(default=None, max_length=8)
+    #: Synthesize TTS narration of the final (localized, if requested) text via
+    #: Sarvam's Bulbul model.
+    narrate: bool = Field(default=False)
 
 
 class ChapterBeat(ApiModel):

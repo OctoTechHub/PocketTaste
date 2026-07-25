@@ -41,6 +41,7 @@ from app.services.goat_agent import GoatStorytellingEngine
 from app.services.explanation import ExplanationService
 from app.services.llm import LlmService
 from app.services.ranking import RankingService
+from app.services.sarvam_finishing import SarvamFinishingService
 from app.services.scheduler import PipelineScheduler
 from app.services.similarity import SimilarityService
 from app.services.storytelling import StorytellingService
@@ -76,6 +77,7 @@ class Container:
     evaluation: EvaluationService
     storytelling: StorytellingService
     goat: GoatStorytellingEngine
+    sarvam_finishing: SarvamFinishingService
     auth: AuthService
     catalog_service: CatalogService
     activity_service: ActivityService
@@ -95,6 +97,9 @@ class Container:
             return
         profiles = await self.profile_repo.all_by_id()
         self.discovery.index(catalog, profiles)
+
+    async def aclose(self) -> None:
+        await self.sarvam_finishing.aclose()
 
 
 def build_container(settings: Settings, gateway: MongoGateway) -> Container:
@@ -119,7 +124,8 @@ def build_container(settings: Settings, gateway: MongoGateway) -> Container:
     evaluation = EvaluationService(settings, ranking)
     goat = GoatStorytellingEngine(settings)
     auth = AuthService(settings, accounts_repo)
-    storytelling = StorytellingService(settings, llm, similarity, goat)
+    sarvam_finishing = SarvamFinishingService(settings, llm)
+    storytelling = StorytellingService(settings, llm, similarity, goat, sarvam_finishing)
     catalog_service = CatalogService(
         settings, content_repo, profile_repo, similarity_audit_repo, similarity, discovery
     )
@@ -167,6 +173,7 @@ def build_container(settings: Settings, gateway: MongoGateway) -> Container:
         evaluation=evaluation,
         storytelling=storytelling,
         goat=goat,
+        sarvam_finishing=sarvam_finishing,
         auth=auth,
         catalog_service=catalog_service,
         activity_service=activity_service,
