@@ -1,5 +1,5 @@
-// One function per server route. Pure transport — no React, no caching.
-// Hooks in src/hooks/api/ wrap these with React Query.
+// One function per server route — the complete surface of the PocketTaste API.
+// Pure transport, no React. Hooks in src/hooks/api/ wrap these with React Query.
 
 import { http } from "./client";
 import type {
@@ -13,9 +13,11 @@ import type {
   ContentResponse,
   DiscoveryRequest,
   DiscoveryResponse,
+  EvaluationRequest,
   JsonRecord,
   LoginRequest,
   MyRecommendationRequest,
+  PipelineRunRequest,
   RecommendationRequest,
   RecommendationResult,
   RegisterRequest,
@@ -35,6 +37,7 @@ export const authApi = {
   login: (body: LoginRequest) =>
     http.post<TokenResponse>("/auth/login", body).then((r) => r.data),
   me: () => http.get<AccountResponse>("/auth/me").then((r) => r.data),
+  scheme: () => http.get<JsonRecord>("/auth/scheme").then((r) => r.data),
 };
 
 // ---------------------------------------------------------------------------
@@ -43,13 +46,9 @@ export const authApi = {
 
 export const catalogApi = {
   list: (params: CatalogQuery = {}) =>
-    http
-      .get<ContentResponse[]>("/catalog", { params })
-      .then((r) => r.data),
+    http.get<ContentResponse[]>("/catalog", { params }).then((r) => r.data),
   get: (contentId: string) =>
-    http
-      .get<ContentDetailResponse>(`/catalog/${contentId}`)
-      .then((r) => r.data),
+    http.get<ContentDetailResponse>(`/catalog/${contentId}`).then((r) => r.data),
   transcript: (contentId: string) =>
     http
       .get<{ content_id: string; title: string; transcript: string }>(
@@ -68,13 +67,12 @@ export const catalogApi = {
 
 export const activityApi = {
   log: (body: ActivityCreate) =>
-    http
-      .post<ActivityAcceptedResponse>("/activity", body)
-      .then((r) => r.data),
+    http.post<ActivityAcceptedResponse>("/activity", body).then((r) => r.data),
   logBatch: (events: ActivityCreate[]) =>
     http
       .post<ActivityAcceptedResponse>("/activity/batch", { events })
       .then((r) => r.data),
+  schema: () => http.get<JsonRecord>("/activity/schema").then((r) => r.data),
   stats: () => http.get<JsonRecord>("/activity/stats").then((r) => r.data),
 };
 
@@ -84,9 +82,7 @@ export const activityApi = {
 
 export const recommendationsApi = {
   forUser: (body: RecommendationRequest) =>
-    http
-      .post<RecommendationResult>("/recommendations", body)
-      .then((r) => r.data),
+    http.post<RecommendationResult>("/recommendations", body).then((r) => r.data),
   forMe: (body: MyRecommendationRequest) =>
     http
       .post<RecommendationResult>("/me/recommendations", body)
@@ -102,6 +98,8 @@ export const recommendationsApi = {
 export const discoveryApi = {
   search: (body: DiscoveryRequest) =>
     http.post<DiscoveryResponse>("/discovery/search", body).then((r) => r.data),
+  pipeline: () => http.get<JsonRecord>("/discovery/pipeline").then((r) => r.data),
+  reindex: () => http.post<JsonRecord>("/discovery/reindex").then((r) => r.data),
 };
 
 // ---------------------------------------------------------------------------
@@ -115,6 +113,23 @@ export const meApi = {
 };
 
 // ---------------------------------------------------------------------------
+// Analytics
+// ---------------------------------------------------------------------------
+
+export const analyticsApi = {
+  content: (contentId: string) =>
+    http.get<JsonRecord>(`/analytics/content/${contentId}`).then((r) => r.data),
+  contentDropOff: (contentId: string) =>
+    http
+      .get<JsonRecord>(`/analytics/content/${contentId}/drop-off`)
+      .then((r) => r.data),
+  user: (userId: string) =>
+    http.get<JsonRecord>(`/analytics/user/${userId}`).then((r) => r.data),
+  creator: (creatorId: string) =>
+    http.get<JsonRecord>(`/analytics/creators/${creatorId}`).then((r) => r.data),
+};
+
+// ---------------------------------------------------------------------------
 // Similarity
 // ---------------------------------------------------------------------------
 
@@ -124,6 +139,10 @@ export const similarityApi = {
   duplicates: (minRisk = 0.6) =>
     http
       .get<JsonRecord>("/similarity/duplicates", { params: { min_risk: minRisk } })
+      .then((r) => r.data),
+  audit: (limit = 25) =>
+    http
+      .get<JsonRecord>("/similarity/audit", { params: { limit } })
       .then((r) => r.data),
 };
 
@@ -147,9 +166,7 @@ export const insightsApi = {
 export const creatorApi = {
   opportunities: (limit = 5, language?: string) =>
     http
-      .get<JsonRecord>("/creator/opportunities", {
-        params: { limit, language },
-      })
+      .get<JsonRecord>("/creator/opportunities", { params: { limit, language } })
       .then((r) => r.data),
   performance: () =>
     http.get<JsonRecord>("/creator/performance").then((r) => r.data),
@@ -164,6 +181,46 @@ export const copilotApi = {
     http.post<JsonRecord>("/copilot/outline", body).then((r) => r.data),
   draft: (body: StoryDraftRequest) =>
     http.post<JsonRecord>("/copilot/draft", body).then((r) => r.data),
+  engine: () => http.get<JsonRecord>("/copilot/engine").then((r) => r.data),
+  guardrails: () => http.get<JsonRecord>("/copilot/guardrails").then((r) => r.data),
+};
+
+// ---------------------------------------------------------------------------
+// Pipeline / ops
+// ---------------------------------------------------------------------------
+
+export const pipelineApi = {
+  run: (body: PipelineRunRequest = {}) =>
+    http.post<JsonRecord>("/pipeline/run", body).then((r) => r.data),
+  runs: (limit = 10) =>
+    http
+      .get<JsonRecord>("/pipeline/runs", { params: { limit } })
+      .then((r) => r.data),
+  runDetail: (runId: string) =>
+    http.get<JsonRecord>(`/pipeline/runs/${runId}`).then((r) => r.data),
+  describe: () => http.get<JsonRecord>("/pipeline/describe").then((r) => r.data),
+  scheduler: () => http.get<JsonRecord>("/pipeline/scheduler").then((r) => r.data),
+  schedulerTick: (force = false) =>
+    http
+      .post<JsonRecord>("/pipeline/scheduler/tick", null, { params: { force } })
+      .then((r) => r.data),
+  schedulerStart: () =>
+    http.post<JsonRecord>("/pipeline/scheduler/start").then((r) => r.data),
+  schedulerStop: () =>
+    http.post<JsonRecord>("/pipeline/scheduler/stop").then((r) => r.data),
+  databricks: () => http.get<JsonRecord>("/pipeline/databricks").then((r) => r.data),
+  cacheInvalidate: () =>
+    http.post<JsonRecord>("/pipeline/cache/invalidate").then((r) => r.data),
+};
+
+// ---------------------------------------------------------------------------
+// Evaluation
+// ---------------------------------------------------------------------------
+
+export const evaluationApi = {
+  run: (body: EvaluationRequest = {}) =>
+    http.post<JsonRecord>("/evaluation/run", body).then((r) => r.data),
+  method: () => http.get<JsonRecord>("/evaluation/method").then((r) => r.data),
 };
 
 // ---------------------------------------------------------------------------
@@ -171,6 +228,8 @@ export const copilotApi = {
 // ---------------------------------------------------------------------------
 
 export const systemApi = {
-  health: () => http.get<JsonRecord>("/health").then((r) => r.data),
   index: () => http.get<JsonRecord>("/").then((r) => r.data),
+  health: () => http.get<JsonRecord>("/health").then((r) => r.data),
+  architecture: () =>
+    http.get<JsonRecord>("/system/architecture").then((r) => r.data),
 };

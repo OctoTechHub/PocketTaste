@@ -7,6 +7,7 @@ import { Bell, ChevronLeft, Download, Share2, ThumbsDown, ThumbsUp } from "lucid
 import type { ContentItem } from "@/data/content";
 import { cn } from "@/lib/utils";
 import { usePlaybackRef } from "@/hooks/api/use-playback-tracking";
+import { TranscriptSection } from "@/components/watch/transcript-section";
 import { Button } from "@/components/ui/button";
 import { Magnify } from "@/components/magnify";
 import { GlowCard, GlowCardGrid } from "@/components/glow-card-grid";
@@ -84,6 +85,7 @@ export function WatchView({
             </motion.div>
 
             <VideoDetails video={video} />
+            <TranscriptSection contentId={video.id} />
           </div>
 
           {/* Up next */}

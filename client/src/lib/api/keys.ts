@@ -12,6 +12,7 @@ export const queryKeys = {
   content: (id: string) => ["catalog", "detail", id] as const,
 
   activityStats: ["activity", "stats"] as const,
+  activitySchema: ["activity", "schema"] as const,
   recommendationWeights: ["recommendations", "weights"] as const,
 
   insightsDemand: ["insights", "demand"] as const,
@@ -24,5 +25,29 @@ export const queryKeys = {
     ["creator", "opportunities", language ?? "all"] as const,
   creatorPerformance: ["creator", "performance"] as const,
 
+  analyticsContent: (id: string) => ["analytics", "content", id] as const,
+  analyticsDropOff: (id: string) => ["analytics", "drop-off", id] as const,
+  analyticsUser: (id: string) => ["analytics", "user", id] as const,
+  analyticsCreator: (id: string) => ["analytics", "creator", id] as const,
+
+  similarityDuplicates: (minRisk: number) =>
+    ["similarity", "duplicates", minRisk] as const,
+  similarityAudit: (limit: number) => ["similarity", "audit", limit] as const,
+
+  pipelineRuns: (limit: number) => ["pipeline", "runs", limit] as const,
+  pipelineRun: (id: string) => ["pipeline", "run", id] as const,
+  pipelineDescribe: ["pipeline", "describe"] as const,
+  pipelineScheduler: ["pipeline", "scheduler"] as const,
+  pipelineDatabricks: ["pipeline", "databricks"] as const,
+
+  evaluationMethod: ["evaluation", "method"] as const,
+
+  copilotEngine: ["copilot", "engine"] as const,
+  copilotGuardrails: ["copilot", "guardrails"] as const,
+
+  discoveryPipeline: ["discovery", "pipeline"] as const,
+  authScheme: ["auth", "scheme"] as const,
+
   health: ["system", "health"] as const,
+  architecture: ["system", "architecture"] as const,
 };

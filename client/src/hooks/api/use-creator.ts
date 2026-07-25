@@ -56,6 +56,40 @@ export function useDemand(refresh = false) {
   });
 }
 
+/** GET /insights/saturation — over-supplied narrative patterns. */
+export function useSaturation() {
+  return useQuery({
+    queryKey: queryKeys.insightsSaturation,
+    queryFn: () => insightsApi.saturation(),
+  });
+}
+
+/** GET /insights/briefs — evidence-backed content briefs. */
+export function useBriefs() {
+  return useQuery({
+    queryKey: queryKeys.insightsBriefs,
+    queryFn: () => insightsApi.briefs(),
+  });
+}
+
+// --- Originality / similarity ----------------------------------------------
+
+/** GET /similarity/duplicates — duplicate families already in the catalog. */
+export function useDuplicates(minRisk = 0.6) {
+  return useQuery({
+    queryKey: queryKeys.similarityDuplicates(minRisk),
+    queryFn: () => similarityApi.duplicates(minRisk),
+  });
+}
+
+/** GET /similarity/audit — recent screening decisions. */
+export function useSimilarityAudit(limit = 25) {
+  return useQuery({
+    queryKey: queryKeys.similarityAudit(limit),
+    queryFn: () => similarityApi.audit(limit),
+  });
+}
+
 // --- Actions (mutations) ----------------------------------------------------
 
 /** POST /similarity/check — screen a draft before upload. */
@@ -76,5 +110,13 @@ export function useCopilotOutline() {
 export function useCopilotDraft() {
   return useMutation({
     mutationFn: (body: StoryDraftRequest) => copilotApi.draft(body),
+  });
+}
+
+/** GET /copilot/guardrails — what the copilot will and will not do. */
+export function useCopilotGuardrails() {
+  return useQuery({
+    queryKey: queryKeys.copilotGuardrails,
+    queryFn: () => copilotApi.guardrails(),
   });
 }

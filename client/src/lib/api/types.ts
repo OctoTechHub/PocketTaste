@@ -251,6 +251,22 @@ export interface StoryDraftRequest extends StoryOutlineRequest {
 }
 
 // ---------------------------------------------------------------------------
+// Pipeline / evaluation
+// ---------------------------------------------------------------------------
+
+export interface PipelineRunRequest {
+  stages?: string[] | null;
+  force_relabel?: boolean;
+  use_llm?: boolean;
+}
+
+export interface EvaluationRequest {
+  k?: number;
+  max_users?: number;
+  min_interactions?: number;
+}
+
+// ---------------------------------------------------------------------------
 // Generic record fallbacks for the analytics / insights / pipeline endpoints
 // whose payloads are large, nested and mostly rendered as-is.
 // ---------------------------------------------------------------------------
