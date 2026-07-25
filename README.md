@@ -16,60 +16,132 @@ next to one.
 
 ## The flow
 
-```
-  CATALOG                              LISTENERS
-  Click.stories (100 stories)          4 accounts
-  title, genre, language,              they sign in and listen
-  episodes, plays, likes, rating
-        |                                    |
-        | import (read only)                 | POST /activity
-        v                                    v
-  +--------------------------------------------------------------+
-  |                        MongoDB                                |
-  |   content_items          activity_events                      |
-  +--------------------------------------------------------------+
-        |
-        |  POST /pipeline/run   (or the background loop)
-        v
-  +--------------------------------------------------------------+
-  |  AGENT 1 - CONTENT INTELLIGENCE                               |
-  |  It reads the story text.                                     |
-  |  OpenAI makes two embeddings and the labels.                  |
-  |  It builds the Haystack search index.                         |
-  |  Output: content_profiles                                     |
-  +--------------------------------------------------------------+
-        v
-  +--------------------------------------------------------------+
-  |  AGENT 2 - INGESTION                                          |
-  |  It reads the events. It uses no AI.                          |
-  |  It makes retention curves and episode interest.              |
-  |  It makes taste vectors and listen sequences.                 |
-  |  Output: content_features, user_profiles                      |
-  +--------------------------------------------------------------+
-        v
-  +--------------------------------------------------------------+
-  |  AGENT 3 - INSIGHT                                            |
-  |  It compares demand with supply for each genre and language.  |
-  |  OpenAI writes the creator briefs from these numbers only.    |
-  |  Output: creator_insights                                     |
-  +--------------------------------------------------------------+
-        |
-        v
-  +--------------------------------------------------------------+
-  |                      WHAT YOU GET                             |
-  |                                                               |
-  |  POST /me/recommendations    8 signals -> MMR -> ranked list  |
-  |  POST /discovery/search      Haystack hybrid search           |
-  |  POST /similarity/check      6 signals -> block/review/clear  |
-  |  GET  /creator/opportunities which genre needs more content   |
-  |  POST /copilot/draft         GOAT writes an outline and text  |
-  +--------------------------------------------------------------+
+```mermaid
+flowchart TB
 
-  Every night, Databricks runs the slow jobs.
-  It writes the results to Delta tables.
+    subgraph S1["1 - WHERE DATA COMES FROM"]
+        direction LR
+        CAT["Click.stories<br/>100 audio series<br/>title, genre, language,<br/>episodes, plays, likes, rating"]
+        LIS["Listeners<br/>4 accounts<br/>they sign in and listen"]
+    end
+
+    subgraph S2["2 - HOW IT ENTERS - FastAPI"]
+        direction LR
+        IMP["scripts.seed<br/>reads the catalog<br/>never writes to it"]
+        AUTH["POST /auth/login<br/>bearer token"]
+        EV["POST /activity<br/>user comes from the token"]
+    end
+
+    subgraph S3["3 - WHERE IT IS KEPT - MongoDB"]
+        direction LR
+        CI[("content_items")]
+        AE[("activity_events")]
+    end
+
+    subgraph S4["4 - THE PIPELINE - 3 agents in order"]
+        direction TB
+        A1["AGENT 1 - CONTENT INTELLIGENCE<br/>reads the story text<br/>makes 2 embeddings and the labels<br/>builds the search index<br/>OUT content_profiles"]
+        A2["AGENT 2 - INGESTION<br/>reads the events - no AI<br/>retention curves, episode interest<br/>taste vectors, listen sequences<br/>OUT content_features, user_profiles"]
+        A3["AGENT 3 - INSIGHT<br/>compares demand with supply<br/>per genre and language<br/>writes the creator briefs<br/>OUT creator_insights"]
+        A1 --> A2 --> A3
+    end
+
+    subgraph S5["5 - WHAT YOU GET"]
+        direction TB
+        R1["POST /me/recommendations<br/>8 signals, then MMR"]
+        R2["POST /discovery/search<br/>keyword + vector search"]
+        R3["POST /similarity/check<br/>6 signals, block or review"]
+        R4["GET /creator/opportunities<br/>which genre needs more content"]
+        R5["POST /copilot/draft<br/>outline and scene text"]
+    end
+
+    subgraph AI["AI PROVIDERS - swap with 2 env vars"]
+        direction TB
+        OAI["OpenAI<br/>embeddings + chat"]
+        DBX["Databricks models<br/>gte-large-en + llama-3.3-70b<br/>included in the workspace"]
+        HAY["Haystack<br/>hybrid search index"]
+        GOAT["GOAT agent<br/>story writer"]
+    end
+
+    subgraph NIGHT["6 - NIGHTLY - Databricks, not in the request path"]
+        direction TB
+        J1["refresh_embeddings"] --> J2["rebuild_clusters"] --> J3["similarity_sweep"]
+        J4["aggregate_features"] --> J5["evaluate_ranker"]
+        J2 --> J5
+        DELTA[("Delta tables<br/>workspace.pockettaste")]
+        J3 --> DELTA
+        J5 --> DELTA
+    end
+
+    CAT -->|"import, read only"| IMP --> CI
+    LIS --> AUTH --> EV --> AE
+
+    CI --> A1
+    AE --> A2
+    A1 -.->|"profiles"| A2
+
+    OAI -.-> A1
+    DBX -.-> A1
+    OAI -.-> A3
+    DBX -.-> A3
+    A1 -.->|"builds"| HAY
+
+    A1 --> R1
+    A2 --> R1
+    A3 --> R4
+    HAY -.-> R2
+    HAY -.-> R3
+    A1 --> R3
+    GOAT -.-> R5
+    A3 -.->|"demand context"| R5
+
+    LOOP["Background loop - every 15 min<br/>runs Agent 2 and Agent 3 only<br/>no AI, so no cost<br/>skips when no new events"]
+    LOOP -.-> A2
+
+    CI --> NIGHT
+    AE --> NIGHT
+
+    classDef src fill:#e8f0fe,stroke:#4285f4,color:#111
+    classDef store fill:#fff4e5,stroke:#f59e0b,color:#111
+    classDef agent fill:#e9f7ef,stroke:#28a745,color:#111
+    classDef out fill:#f3e8fd,stroke:#8b5cf6,color:#111
+    classDef ext fill:#fdecea,stroke:#dc3545,color:#111
+
+    class CAT,LIS src
+    class CI,AE,DELTA store
+    class A1,A2,A3,LOOP agent
+    class R1,R2,R3,R4,R5 out
+    class OAI,DBX,HAY,GOAT ext
 ```
 
 Start at `GET /` for the list of all endpoints.
+
+### How one recommendation is built
+
+```mermaid
+flowchart LR
+    U["Listener<br/>bearer token"] --> P["user_profiles<br/>taste vector<br/>listen sequence"]
+    P --> GEN["Pick candidates<br/>from 100 stories"]
+
+    GEN --> SCORE["Score each one"]
+
+    subgraph SIG["8 signals - weights add to 1.0"]
+        direction TB
+        T["FROM THE TEXT<br/>affinity 0.26<br/>originality 0.07"]
+        B["FROM BEHAVIOUR<br/>retention 0.18<br/>co-occurrence 0.14<br/>sequence 0.10<br/>genre affinity 0.10"]
+        M["FROM METADATA<br/>freshness 0.08<br/>exploration 0.07"]
+    end
+
+    SCORE --> SIG
+    SIG --> MMR["MMR<br/>drop near-copies<br/>of what is already picked"]
+    MMR --> DUP["Remove re-uploads<br/>keep the first upload"]
+    DUP --> OUT["Ranked list<br/>each item shows<br/>its own signal values"]
+
+    classDef sig fill:#e9f7ef,stroke:#28a745,color:#111
+    classDef res fill:#f3e8fd,stroke:#8b5cf6,color:#111
+    class T,B,M sig
+    class OUT res
+```
 
 ---
 

@@ -314,12 +314,32 @@ async def main(args: argparse.Namespace) -> int:
 
         if args.clear:
             removed = await container.activity_repo.collection.delete_many({"is_synthetic": True})
+            await container.users_repo.collection.delete_many({"user_id": {"$regex": "^listener_"}})
             logger.info("Cleared %d previously simulated events.", removed.deleted_count)
 
         for user_id, events in generated.items():
             for start in range(0, len(events), 1000):
                 await container.activity_repo.insert_many(events[start : start + 1000])
         logger.info("Wrote %d simulated events across %d accounts.", total, len(generated))
+
+        if args.cohort:
+            # Four deep histories cannot produce a demand signal. Genre demand is a
+            # statement about a population, and collaborative signals need many
+            # listeners rather than many events from a few. This adds a background
+            # audience over the same real catalog, calibrated to each story's real
+            # plays, likes and rating.
+            from app.services.catalog_simulation import RealCatalogSimulator
+
+            logger.info("Adding a %d-listener cohort over the real catalog...", args.cohort)
+            cohort = RealCatalogSimulator(seed=args.seed, user_count=args.cohort).run(catalog)
+            for start in range(0, len(cohort.events), 2000):
+                await container.activity_repo.insert_many(cohort.events[start : start + 2000])
+            logger.info(
+                "Wrote %d cohort events (%d listeners, completion %.0f%%).",
+                len(cohort.events),
+                cohort.notes["listeners"],
+                cohort.notes["completion_rate"] * 100,
+            )
 
         real = await container.activity_repo.count({"is_synthetic": False})
         synthetic = await container.activity_repo.count({"is_synthetic": True})
@@ -338,5 +358,12 @@ if __name__ == "__main__":
     parser.add_argument("--apply", action="store_true", help="Write the events.")
     parser.add_argument("--clear", action="store_true", help="Remove previously simulated events first.")
     parser.add_argument("--days", type=int, default=60, help="How far back the history stretches.")
+    parser.add_argument(
+        "--cohort",
+        type=int,
+        default=0,
+        help="Also add N background listeners over the real catalog. Genre demand is a "
+        "statement about a population; four accounts cannot make one.",
+    )
     parser.add_argument("--seed", type=int, default=SEED, help="RNG seed; the run is reproducible.")
     raise SystemExit(asyncio.run(main(parser.parse_args())))

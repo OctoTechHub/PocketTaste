@@ -110,6 +110,13 @@ class Settings(BaseSettings):
     databricks_node_type: str = Field(default="m5.large", alias="DATABRICKS_NODE_TYPE")
     databricks_spark_version: str = Field(default="16.4.x-scala2.12", alias="DATABRICKS_SPARK_VERSION")
     databricks_workspace_base: str = Field(default="", alias="DATABRICKS_WORKSPACE_BASE")
+    #: Databricks Foundation Model APIs are OpenAI-compatible and included in the
+    #: workspace, so inference costs nothing extra. Set either provider to
+    #: "databricks" to use them instead of OpenAI.
+    embedding_provider: str = Field(default="openai", alias="EMBEDDING_PROVIDER")
+    llm_provider: str = Field(default="openai", alias="LLM_PROVIDER")
+    databricks_embedding_model: str = "databricks-gte-large-en"
+    databricks_llm_model: str = "databricks-meta-llama-3-3-70b-instruct"
 
     # --- offline fallback ---------------------------------------------------
     fallback_embedding_dimensions: int = Field(default=384, ge=64, le=2048)
@@ -168,6 +175,20 @@ class Settings(BaseSettings):
     @property
     def active_embedding_dimensions(self) -> int:
         return self.embedding_dimensions if self.openai_enabled else self.fallback_embedding_dimensions
+
+    @property
+    def databricks_openai_base_url(self) -> str:
+        """Databricks serves its models behind an OpenAI-compatible path."""
+        host = self.databricks_host.split("/?")[0].split("?")[0].rstrip("/")
+        return f"{host}/serving-endpoints"
+
+    @property
+    def use_databricks_embeddings(self) -> bool:
+        return self.embedding_provider.lower() == "databricks" and self.databricks_enabled
+
+    @property
+    def use_databricks_llm(self) -> bool:
+        return self.llm_provider.lower() == "databricks" and self.databricks_enabled
 
     @property
     def jwt_signing_key(self) -> str:

@@ -50,7 +50,17 @@ class LlmService:
         self._settings = settings
         self._openai: AsyncOpenAI | None = None
         self._sarvam: AsyncOpenAI | None = None
+        self._databricks: AsyncOpenAI | None = None
         self._degraded = False
+        # Databricks Foundation Model APIs are OpenAI-compatible and included in the
+        # workspace, so they cost nothing on top of it.
+        if settings.use_databricks_llm:
+            self._databricks = AsyncOpenAI(
+                api_key=settings.databricks_token,
+                base_url=settings.databricks_openai_base_url,
+                timeout=settings.llm_timeout_seconds,
+                max_retries=settings.llm_max_retries,
+            )
         if settings.openai_enabled:
             self._openai = AsyncOpenAI(
                 api_key=settings.openai_secret,
@@ -69,11 +79,15 @@ class LlmService:
 
     @property
     def available(self) -> bool:
-        return (self._openai is not None or self._sarvam is not None) and not self._degraded
+        clients = (self._openai, self._sarvam, self._databricks)
+        return any(client is not None for client in clients) and not self._degraded
 
     def describe(self) -> dict:
         return {
+            "provider": "databricks" if self._databricks else ("openai" if self._openai else None),
             "openai": self._settings.llm_model if self._openai else None,
+            "databricks": self._settings.databricks_llm_model if self._databricks else None,
+            "billed_to": "databricks workspace (included)" if self._databricks else "openai account",
             "sarvam": self._settings.sarvam_model if self._sarvam else None,
             "sarvam_languages": self._settings.sarvam_languages if self._sarvam else [],
             "degraded": self._degraded,
@@ -81,9 +95,12 @@ class LlmService:
         }
 
     def _route(self, language: str | None) -> tuple[AsyncOpenAI | None, str]:
-        """Indic languages go to Sarvam when configured; everything else to OpenAI."""
+        """Indic languages go to Sarvam when configured. Otherwise prefer Databricks
+        (included in the workspace) over OpenAI (metered)."""
         if language and self._sarvam and language.lower() in self._settings.sarvam_languages:
             return self._sarvam, self._settings.sarvam_model
+        if self._databricks:
+            return self._databricks, self._settings.databricks_llm_model
         if self._openai:
             return self._openai, self._settings.llm_model
         if self._sarvam:
