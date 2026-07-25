@@ -3,9 +3,19 @@
 from __future__ import annotations
 
 from functools import lru_cache
+from typing import Annotated
 
 from pydantic import Field, field_validator
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
+
+#: A list field read from a comma-separated environment variable.
+#:
+#: pydantic-settings treats `list[str]` as a complex type and runs `json.loads()` on
+#: the raw value *before* any validator sees it. So `SARVAM_LANGUAGES=hi,ta,te` does
+#: not merely get ignored -- it raises, and the whole Settings object fails to build,
+#: which takes down every process that reads configuration. `NoDecode` skips that
+#: JSON step and lets `_split_csv` below do the parsing.
+CsvList = Annotated[list[str], NoDecode]
 
 
 class RankingWeights(BaseSettings):
@@ -52,7 +62,7 @@ class Settings(BaseSettings):
     app_name: str = "PocketTaste Creator Intelligence API"
     app_version: str = "2.0.0"
     environment: str = Field(default="development")
-    cors_origins: list[str] = Field(default_factory=lambda: ["*"])
+    cors_origins: CsvList = Field(default_factory=lambda: ["*"])
 
     # --- storage ------------------------------------------------------------
     # `.env` in this repo uses DB_URL; MONGODB_URI is accepted as an alias.
@@ -97,7 +107,9 @@ class Settings(BaseSettings):
     #: 2026-07-26 that "sarvam-30b" is current. It is a reasoning model — see
     #: `LlmService` for why max_tokens must budget for reasoning_content too.
     sarvam_model: str = "sarvam-30b"
-    sarvam_languages: list[str] = Field(default_factory=lambda: ["hi", "ta", "te", "bn", "mr", "kn", "gu"])
+    sarvam_languages: CsvList = Field(
+        default_factory=lambda: ["hi", "ta", "te", "bn", "mr", "kn", "gu"]
+    )
     #: Sarvam's Translate and Text-to-Speech APIs are native REST endpoints, not
     #: OpenAI-compatible, so they are called directly against this host rather than
     #: through `sarvam_base_url` (which is only the chat-completions path).

@@ -11,6 +11,9 @@ command:
   - --port
   - $DATABRICKS_APP_PORT
 
+# `valueFrom` reads a key from the `pockettaste` secret scope. The app's own service
+# principal needs READ on that scope or every one of these resolves to nothing and
+# the container boots with no configuration. The deploy script grants it.
 env:
   - name: DB_URL
     valueFrom: mongo_uri
@@ -18,10 +21,18 @@ env:
     valueFrom: openai_key
   - name: JWT_SECRET
     valueFrom: jwt_secret
+  - name: SARVAM_API_KEY
+    valueFrom: sarvam_api_key
+  - name: DATABRICKS_TOKEN
+    valueFrom: databricks_token
   - name: MONGO_DB_NAME
     value: Click
   - name: STORIES_COLLECTION
     value: stories
+  - name: SARVAM_LANGUAGES
+    value: hi,ta,te,bn,mr,kn,gu
+  - name: ENVIRONMENT
+    value: production
   # The API is one container, so the loop would run once per replica. Keep the
   # scheduled work in the Databricks job, which has exactly one owner.
   - name: BACKGROUND_PIPELINE_ENABLED

@@ -6,6 +6,7 @@ import pytest
 from conftest import make_item
 
 from app.domain.enums import DuplicateKind, RiskLevel
+from app.domain.models import SimilaritySignals
 from app.services.content_intelligence import ContentIntelligenceService, normalise_title
 from app.services.embeddings import EmbeddingService
 from app.services.llm import LlmService
@@ -204,3 +205,103 @@ async def test_empty_catalog_yields_no_finding_rather_than_a_false_positive(serv
     assert report.risk is RiskLevel.CLEAR
     assert report.matches == []
     assert report.originality_score == 1.0
+
+
+# ---------------------------------------------------------------------------
+# Reworded copies - the case the thresholds were retuned for
+# ---------------------------------------------------------------------------
+
+
+async def test_a_strong_skeleton_match_alone_triggers_review(service, profiled):
+    """The Solo Leveling case: same story, new title, every word rewritten.
+
+    Verbatim overlap is ~0, the title does not match, and there are no chapters. Only
+    the arc signal fires. If the blend is allowed to average those zeros in, the copy
+    passes as clear -- which is exactly what happened before this rule existed.
+    """
+    from app.services.similarity import _ARC_ALONE_REVIEW
+    from app.domain.models import SimilarityMatch, SimilaritySignals
+
+    strong_arc = SimilarityMatch(
+        content_id="orig", title="Ashen Throne", creator_id="c", language="en",
+        combined_score=0.55,                       # below the 0.72 review threshold
+        signals=SimilaritySignals(narrative_arc=_ARC_ALONE_REVIEW + 0.02, semantic=0.60),
+    )
+    assert service._verdict(0.55, DuplicateKind.NONE, None, strong_arc) is RiskLevel.REVIEW
+
+
+def test_a_weak_skeleton_match_stays_clear(service):
+    """Two unrelated stories in one genre must not trip the same rule."""
+    from app.domain.models import SimilarityMatch, SimilaritySignals
+
+    typical = SimilarityMatch(
+        content_id="other", title="Iron Realm", creator_id="c", language="en",
+        combined_score=0.55,
+        signals=SimilaritySignals(narrative_arc=0.72, semantic=0.70),   # the real-catalog ceiling
+    )
+    assert service._verdict(0.55, DuplicateKind.NONE, None, typical) is RiskLevel.CLEAR
+
+
+def test_arc_threshold_sits_above_the_measured_genuine_ceiling():
+    """Calibration guard. Across 4,950 real distinct pairs the arc peaks at 0.726, and
+    a reworded re-upload measures 0.85. Both thresholds must sit in that gap."""
+    from app.services.similarity import _ARC_ALONE_REVIEW, _NEAR_ARC_THRESHOLD
+
+    measured_genuine_ceiling = 0.726
+    measured_reworded_copy = 0.85
+    for threshold in (_ARC_ALONE_REVIEW, _NEAR_ARC_THRESHOLD):
+        assert measured_genuine_ceiling < threshold < measured_reworded_copy
+
+
+# ---------------------------------------------------------------------------
+# Episode ranges - found by running the gate over real YouTube re-uploads
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("title", "expected"),
+    [
+        ("Yakshini 701 to 800 | Pocket FM", (701, 800)),
+        ("Lust System In Solo Leveling Episode 21-50", (21, 50)),
+        ("Yakshini 101 se 200 tak", (101, 200)),
+        ("Mysterious Doctor Episode 1 TO 50 Complete", (1, 50)),
+        ("Solo Leveling Season 3", None),
+        ("Ashen Throne: The End", None),
+    ],
+)
+def test_episode_ranges_are_read_from_the_title(title, expected):
+    from app.services.content_intelligence import episode_range
+
+    assert episode_range(title) == expected
+
+
+def test_consecutive_parts_are_not_duplicates(service):
+    """Real case from the live catalog: "Yakshini 701 to 800" and "Yakshini 801 to
+    900" normalise to the same key because digits are stripped, so the title signal
+    read 1.0 and called them a re-upload. They are consecutive parts of one series —
+    normal publishing."""
+    from app.services.content_intelligence import normalise_title
+
+    a, b = "Yakshini 701 to 800 | Pocket FM", "Yakshini 801 to 900 | Pocket FM"
+    assert normalise_title(a) == normalise_title(b)          # the trap
+
+    tokens = set()
+    assert service._title_signal(normalise_title(a), tokens, b, a) < 0.5
+    assert service._classify(SimilaritySignals(narrative_arc=0.97, semantic=0.97),
+                             normalise_title(a), b, a) is DuplicateKind.NONE
+
+
+def test_overlapping_ranges_are_still_duplicates(service):
+    """Re-uploading 1-100 as 50-150 is republishing the same episodes."""
+    from app.services.content_intelligence import normalise_title
+
+    a, b = "Yakshini 1 to 100", "Yakshini 50 to 150"
+    assert service._title_signal(normalise_title(a), set(), b, a) == 1.0
+
+
+def test_a_season_marker_still_collides(service):
+    """No range declared, so the season rule must keep working."""
+    from app.services.content_intelligence import normalise_title
+
+    a, b = "Solo Leveling Season 3", "Solo Leveling"
+    assert service._title_signal(normalise_title(a), set(), b, a) == 1.0

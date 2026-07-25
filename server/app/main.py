@@ -9,6 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api import api_router
 from app.container import build_container
+from app.core.clock import utcnow
 from app.core.config import get_settings
 from app.core.errors import register_exception_handlers
 from app.core.logging import configure_logging, get_logger
@@ -33,6 +34,44 @@ the numbers came from the built-in simulator and are not real audience data.
 """
 
 
+async def _record_startup(container, settings) -> None:
+    """Write a startup heartbeat with which configuration actually resolved.
+
+    A deployed container behind SSO cannot be curled from a terminal, so "did the
+    environment variables arrive?" is otherwise unanswerable without opening a
+    browser. The heartbeat answers it: the document existing at all proves `DB_URL`
+    resolved, and its fields report the rest. Only booleans and names are written —
+    never a secret value.
+    """
+    try:
+        await container.gateway.database["service_heartbeats"].insert_one(
+            {
+                "started_at": utcnow(),
+                "environment": settings.environment,
+                "version": settings.app_version,
+                "config_resolved": {
+                    "db_url": bool(settings.mongo_uri),
+                    "mongo_db_name": settings.mongo_db_name,
+                    "stories_collection": settings.stories_collection,
+                    "openai_key": bool(settings.openai_secret),
+                    "jwt_secret": settings.jwt_secret_configured,
+                    "sarvam_api_key": settings.sarvam_enabled,
+                    "sarvam_languages": settings.sarvam_languages,
+                    "databricks_token": settings.databricks_enabled,
+                    "embedding_provider": settings.embedding_provider,
+                    "llm_provider": settings.llm_provider,
+                    "background_pipeline": settings.background_pipeline_enabled,
+                },
+                "backends": {
+                    "embeddings": container.embeddings.describe(),
+                    "llm": container.llm.describe(),
+                },
+            }
+        )
+    except Exception:  # noqa: BLE001 - a diagnostic must never block startup
+        get_logger(__name__).exception("Could not write the startup heartbeat")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     settings = get_settings()
@@ -47,6 +86,7 @@ async def lifespan(app: FastAPI):
     if connected:
         await container.warm_up()
         await container.scheduler.start()
+        await _record_startup(container, settings)
     else:
         logger.warning("Running without storage — endpoints that need MongoDB will return 503.")
 

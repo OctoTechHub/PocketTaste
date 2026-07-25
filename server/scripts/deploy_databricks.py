@@ -155,6 +155,8 @@ def deploy_app(client: "Databricks", root: Path, user: str, settings) -> int:
     client.ensure_secret(
         SECRET_SCOPE, "jwt_secret", settings.jwt_secret or _secrets.token_urlsafe(48)
     )
+    client.ensure_secret(SECRET_SCOPE, "sarvam_api_key", settings.sarvam_api_key or "")
+    client.ensure_secret(SECRET_SCOPE, "databricks_token", settings.databricks_token)
 
     existing = client.call("GET", f"/api/2.0/apps/{APP_NAME}")
     if existing.status_code == 404:
@@ -171,6 +173,41 @@ def deploy_app(client: "Databricks", root: Path, user: str, settings) -> int:
             if state.get("compute_status", {}).get("state") == "ACTIVE":
                 break
             time.sleep(15)
+
+    # `valueFrom` in app.yaml names an app **resource**, not a scope key. Without the
+    # resources declared here every variable silently resolves to nothing and the
+    # container boots unconfigured — which presents as "the env vars are missing".
+    resources = [
+        {"name": key, "secret": {"scope": SECRET_SCOPE, "key": key, "permission": "READ"}}
+        for key in ("mongo_uri", "openai_key", "jwt_secret", "sarvam_api_key", "databricks_token")
+    ]
+    patched = client.call(
+        "PATCH", f"/api/2.0/apps/{APP_NAME}",
+        json={"name": APP_NAME, "description": "PocketTaste creator-intelligence API",
+              "resources": resources},
+    )
+    logger.info(
+        "Declared %d secret resources on the app (%s)",
+        len(resources), "ok" if patched.status_code == 200 else patched.text[:120],
+    )
+
+    # The app runs as its own service principal, which is not a member of `users`.
+    # Without an explicit READ grant every `valueFrom` in app.yaml resolves to
+    # nothing and the container starts with no configuration at all — which looks
+    # exactly like "the env vars are missing".
+    app = client.call("GET", f"/api/2.0/apps/{APP_NAME}").json()
+    principal = app.get("service_principal_client_id")
+    if principal:
+        acl = client.call(
+            "POST", "/api/2.0/secrets/acls/put",
+            json={"scope": SECRET_SCOPE, "principal": principal, "permission": "READ"},
+        )
+        logger.info(
+            "Granted READ on scope '%s' to the app service principal (%s)",
+            SECRET_SCOPE, "ok" if acl.status_code == 200 else acl.text[:120],
+        )
+    else:
+        logger.warning("Could not resolve the app service principal; secrets may not resolve.")
 
     files = [
         (path, path.relative_to(root).as_posix())

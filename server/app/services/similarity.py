@@ -30,7 +30,12 @@ from app.domain.models import (
     SimilarityReport,
     SimilaritySignals,
 )
-from app.services.content_intelligence import ContentIntelligenceService, normalise_title
+from app.services.content_intelligence import (
+    ContentIntelligenceService,
+    episode_range,
+    normalise_title,
+    ranges_overlap,
+)
 from app.services.llm import LlmService
 from app.services.vectors import content_tokens, cosine, jaccard, shingles
 
@@ -38,12 +43,20 @@ logger = get_logger(__name__)
 
 _EXACT_SHINGLE_THRESHOLD = 0.55
 
-#: Two unrelated stories in the same genre routinely reach 0.80-0.88 on the arc
-#: embedding: the fingerprint deliberately strips proper nouns, so "underdog gains
-#: power" looks alike across a whole genre. A genuine paraphrased re-upload sits at
-#: 0.94+. The bar is set above the genre floor so the flag means something.
-_NEAR_ARC_THRESHOLD = 0.92
-_NEAR_SEMANTIC_THRESHOLD = 0.78
+#: Calibrated against the live catalog, not guessed. Across all 4,950 genuine
+#: distinct pairs the narrative-arc score peaks at 0.726 (p50 0.354, p99 0.586). A
+#: reworded re-upload of a real story measures 0.85. The bar sits in that gap.
+#:
+#: This was originally 0.92, which was too strict: it missed exactly the case the
+#: gate exists for — same story, new title, every word rewritten.
+_NEAR_ARC_THRESHOLD = 0.80
+_NEAR_SEMANTIC_THRESHOLD = 0.65
+
+#: A strong skeleton match is a finding on its own. The arc signal is built to
+#: survive paraphrasing, so when it fires the combined blend must not be allowed to
+#: bury it — a rewritten copy scores ~0 on verbatim overlap, ~0 on title, and often
+#: has no chapter markers, and those zeros drag the average under the threshold.
+_ARC_ALONE_REVIEW = 0.80
 _VARIANT_SEMANTIC_THRESHOLD = 0.72
 
 _EXPLANATION_PROMPT = """A creator is uploading a story. Our screening gate compared it
@@ -178,7 +191,9 @@ class SimilarityService:
         title_collision = next(
             (match for match in matches if match.signals.title >= 1.0), None
         )
-        risk = self._verdict(top_score, kind, title_collision)
+        risk = self._verdict(
+            top_score, kind, title_collision, top_matches[0] if top_matches else None
+        )
         if title_collision is not None and title_collision not in top_matches:
             # The reviewer must see the colliding title even when it did not win on score.
             top_matches.append(title_collision)
@@ -197,6 +212,7 @@ class SimilarityService:
                 "review": self._settings.similarity_review_threshold,
                 "exact_shingle": _EXACT_SHINGLE_THRESHOLD,
                 "near_duplicate_arc": _NEAR_ARC_THRESHOLD,
+                "arc_alone_review": _ARC_ALONE_REVIEW,
                 "near_duplicate_semantic": _NEAR_SEMANTIC_THRESHOLD,
                 "series_variant_semantic": _VARIANT_SEMANTIC_THRESHOLD,
             },
@@ -236,12 +252,14 @@ class SimilarityService:
                 lexical_shingle=jaccard(
                     draft_shingles, shingles(item.transcript or item.description)
                 ),
-                title=self._title_signal(draft_title_key, draft_title_tokens, item.title),
+                title=self._title_signal(
+                    draft_title_key, draft_title_tokens, item.title, draft_item.title
+                ),
                 description=jaccard(draft_description_tokens, set(content_tokens(item.description))),
                 chapter_structure=_chapter_structure_similarity(draft_item.chapters, item.chapters),
             )
             combined = self._combine(signals, applicable)
-            kind = self._classify(signals, draft_title_key, item.title)
+            kind = self._classify(signals, draft_title_key, item.title, draft_item.title)
             matches.append(
                 SimilarityMatch(
                     content_id=item.content_id,
@@ -266,7 +284,9 @@ class SimilarityService:
         return round(min(1.0, total), 4)
 
     @staticmethod
-    def _title_signal(draft_key: str, draft_tokens: set[str], other_title: str) -> float:
+    def _title_signal(
+        draft_key: str, draft_tokens: set[str], other_title: str, draft_title: str = ""
+    ) -> float:
         """1.0 when the season/part-stripped titles are identical, else token Jaccard.
 
         This is the signal that catches the 'Solo Leveling' / 'Solo Leveling Season 3'
@@ -274,13 +294,26 @@ class SimilarityService:
         """
         other_key = normalise_title(other_title)
         if draft_key and draft_key == other_key:
+            # Same series name, but do they cover the same episodes? "Yakshini 701 to
+            # 800" and "Yakshini 801 to 900" normalise identically because the digits
+            # are stripped, yet they are consecutive parts, not a re-upload.
+            mine, theirs = episode_range(draft_title), episode_range(other_title)
+            if mine and theirs and not ranges_overlap(mine, theirs):
+                return 0.35
             return 1.0
         if draft_key and other_key and (draft_key in other_key or other_key in draft_key):
             return 0.85
         return jaccard(draft_tokens, set(content_tokens(other_title)))
 
     @staticmethod
-    def _classify(signals: SimilaritySignals, draft_key: str, other_title: str) -> DuplicateKind:
+    def _classify(
+        signals: SimilaritySignals, draft_key: str, other_title: str, draft_title: str = ""
+    ) -> DuplicateKind:
+        mine, theirs = episode_range(draft_title), episode_range(other_title)
+        if mine and theirs and not ranges_overlap(mine, theirs):
+            # Consecutive parts of one series. Publishing episode 801-900 after
+            # 701-800 is the normal thing to do, not a duplicate upload.
+            return DuplicateKind.NONE
         if signals.lexical_shingle >= _EXACT_SHINGLE_THRESHOLD:
             return DuplicateKind.EXACT_DUPLICATE
         if (
@@ -322,7 +355,11 @@ class SimilarityService:
         return f"No duplicate pattern; strongest signal was {strongest[0]} at {strongest[1]:.2f}."
 
     def _verdict(
-        self, top_score: float, kind: DuplicateKind, title_collision: SimilarityMatch | None = None
+        self,
+        top_score: float,
+        kind: DuplicateKind,
+        title_collision: SimilarityMatch | None = None,
+        top_match: SimilarityMatch | None = None,
     ) -> RiskLevel:
         # A confirmed exact copy or series re-upload is a block regardless of the blend,
         # because those two signals are unambiguous on their own.
@@ -334,6 +371,12 @@ class SimilarityService:
             return RiskLevel.REVIEW
         if top_score >= self._settings.similarity_review_threshold:
             return RiskLevel.REVIEW
+        # A strong story-skeleton match, even when nothing else agrees. This is the
+        # rewritten-copy case: different title, different words, same story.
+        if title_collision is None and top_match is not None:
+            if top_match.signals.narrative_arc >= _ARC_ALONE_REVIEW:
+                return RiskLevel.REVIEW
+
         # "Ashen Throne Season 5" against an existing "Ashen Throne" is the exact
         # pattern this system was asked to catch. The titles are identical once
         # season/part/language markers are stripped, which on its own warrants a human

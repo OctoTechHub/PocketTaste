@@ -94,6 +94,35 @@ Describe only what the text supports. Strip character and place names from
 `premise` so two versions of the same story with renamed characters still match."""
 
 
+#: "701 to 800", "1-20", "Episode 21-50", "101 se 200". Sequential episode ranges,
+#: not season markers.
+_EPISODE_RANGE = re.compile(
+    r"(\d{1,5})\s*(?:-|–|—|to|se|tak|through)\s*(\d{1,5})", re.IGNORECASE
+)
+
+
+def episode_range(title: str) -> tuple[int, int] | None:
+    """Extract an episode range from a title, if it declares one.
+
+    This matters because `normalise_title` strips digits: "Yakshini 701 to 800" and
+    "Yakshini 801 to 900" both reduce to "yakshini", so the title signal reads 1.0
+    and calls them the same upload. They are not — they are consecutive parts of one
+    series, which is normal publishing, not duplication.
+    """
+    match = _EPISODE_RANGE.search(title)
+    if not match:
+        return None
+    low, high = int(match.group(1)), int(match.group(2))
+    return (low, high) if low <= high else (high, low)
+
+
+def ranges_overlap(left: tuple[int, int] | None, right: tuple[int, int] | None) -> bool:
+    """True when two episode ranges cover any of the same episodes."""
+    if left is None or right is None:
+        return True          # no range declared, so we cannot rule out overlap
+    return left[0] <= right[1] and right[0] <= left[1]
+
+
 def normalise_title(title: str) -> str:
     """Strip season/part/language markers so series variants share one key."""
     lowered = re.sub(r"[^\w\s]", " ", title.lower())
