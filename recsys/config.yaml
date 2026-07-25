@@ -1,0 +1,42 @@
+# RecBole config for a fair sequence-aware benchmark on MovieLens-100k.
+# Leave-one-out split by time (TO/LS) is the standard setup for next-item models —
+# exactly the "predict the next episode/series" objective PocketTaste cares about.
+
+# --- dataset fields ---
+USER_ID_FIELD: user_id
+ITEM_ID_FIELD: item_id
+RATING_FIELD: rating
+TIME_FIELD: timestamp
+load_col:
+  inter: [user_id, item_id, rating, timestamp]
+
+# Treat ratings >= 3 as positive interactions (implicit feedback).
+val_interval:
+  rating: "[3,inf)"
+unused_col:
+  inter: [rating]
+
+# --- sequential modelling ---
+MAX_ITEM_LIST_LENGTH: 50
+ITEM_LIST_LENGTH_FIELD: item_length
+
+# --- evaluation ---
+eval_args:
+  split: { LS: valid_and_test }   # leave-one-out (next-item)
+  order: TO                        # temporal order
+  mode: full                       # rank against the full catalog
+  group_by: user
+metrics: [Recall, NDCG, MRR, Hit]
+topk: [10]
+valid_metric: NDCG@10
+metric_decimal_place: 4
+
+# --- training ---
+epochs: 25
+train_batch_size: 2048
+eval_batch_size: 4096
+stopping_step: 5
+learning_rate: 0.001
+seed: 42
+reproducibility: true
+show_progress: false

@@ -1,0 +1,8 @@
+# RecBole offline-benchmark environment (kept separate from the API so torch
+# never bloats the server). Recommended: a fresh Python 3.10 or 3.11 venv/conda.
+recbole==1.2.0
+torch>=2.1,<2.4
+pandas>=2.0
+numpy>=1.24
+pymongo>=4.8        # only needed for export_pockettaste.py
+python-dotenv>=1.0
