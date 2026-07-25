@@ -38,7 +38,7 @@ flowchart TB
     API --> R2["<b>/discovery/search</b><br/>keyword + vector, Haystack"]
     API --> R3["<b>/similarity/check</b><br/>6 signals, block or review"]
     API --> R4["<b>/creator/opportunities</b><br/>which genre needs more"]
-    API --> R5["<b>/copilot/draft</b><br/>GOAT writes outline and text"]
+    API --> R5["<b>/copilot/draft</b><br/>GOAT writes outline and text<br/>then Sarvam: polish, localize, TTS"]
 
     classDef src fill:#e8f0fe,stroke:#4285f4,color:#111
     classDef store fill:#fff4e5,stroke:#f59e0b,color:#111
@@ -173,7 +173,7 @@ End". Everything else goes to a person.
 | OpenAI **or** Databricks | Labels, text | Writes labels and briefs. It never picks a number. |
 | GOAT | Copilot | The real package writes the outline and the scenes. |
 | Databricks | Nightly, hosting | Slow jobs, Delta tables, and it hosts the API. |
-| Sarvam AI | Optional | Can write Hindi text. Off now. |
+| Sarvam AI | Optional | Indic-language routing, plus a finishing stage after `/copilot/draft`: same-language polish, translation into an Indic language, TTS narration. Off unless `SARVAM_API_KEY` is set. |
 
 ---
 
@@ -209,7 +209,7 @@ rows back out.
 | Real metrics: how many users want what | Listener counts, plays, completion, failed searches, on every row | `/insights/demand` |
 | Similarity score to stop the "Season 3" re-upload | 6 signals, story-skeleton match | `services/similarity.py` |
 | GOAT for storytelling | The real package, outline and scene text | `services/goat_agent.py` |
-| Sarvam AI scope | Wired as an Indic-language provider, off by default | `services/llm.py` |
+| Sarvam AI scope | Wired as an Indic-language provider, and as a finishing stage after GOAT + the similarity gate: polish, Indic translation, TTS narration. Off by default | `services/llm.py`, `services/sarvam_finishing.py` |
 | "No fake or fabricated things" | Provenance and confidence on every number | `domain/provenance.py` |
 
 Two things we added because the data asked for them:
