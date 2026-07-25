@@ -70,7 +70,6 @@ export function WatchView({
                   poster={video.wideThumb}
                   playsInline
                   preload="metadata"
-                  crossOrigin=""
                 />
                 <VideoPlayerControlBar>
                   <VideoPlayerPlayButton />

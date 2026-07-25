@@ -99,6 +99,8 @@ export interface ContentResponse {
   is_synthetic: boolean;
   published_at: string;
   transcript_chars: number;
+  /** Real upstream aggregates: plays, likes, rating, narrator, ... */
+  popularity?: Record<string, unknown>;
 }
 
 export interface ContentDetailResponse {

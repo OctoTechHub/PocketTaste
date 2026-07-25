@@ -33,7 +33,6 @@ export function Billboard({ hero }: { hero: ContentItem }) {
           loop
           playsInline
           preload="auto"
-          crossOrigin=""
         />
         <VideoPlayerControlBar>
           <VideoPlayerPlayButton />
