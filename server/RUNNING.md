@@ -392,6 +392,44 @@ Four things this workspace forced, all handled in code:
 `SystemExit(0)` is also avoided — inside Databricks' IPython kernel even a zero exit
 registers as a task failure.
 
+### Hosting the API on Databricks too
+
+```powershell
+.\.venv\Scripts\python.exe -m scripts.deploy_databricks --app
+```
+
+Databricks Apps runs the FastAPI container and puts workspace SSO in front of it.
+**Deployed and running:**
+
+```
+https://pockettaste-api-7474647028679809.aws.databricksapps.com
+```
+
+Open it in a browser. A personal access token will **not** work — Apps expects an
+OAuth session, which is what makes the API reachable by your workspace and by nobody
+else.
+
+Two deliberate differences from a local run, both in `app.yaml`:
+
+- Secrets arrive as environment variables from the same `pockettaste` scope the batch
+  jobs use, so there is one place to rotate them.
+- `BACKGROUND_PIPELINE_ENABLED=false`. Scheduled work should have exactly one owner,
+  and that is the Databricks job — not an API replica.
+
+`requirements-app.txt` drops GOAT, because the Apps builder cannot fetch a git URL.
+The copilot falls back to staged prompts and says so in `generated_by`.
+
+### Is there a PocketFM connector?
+
+No. I searched all **2,043** Databricks Marketplace listings — nothing for PocketFM,
+and no audio-platform connector that would carry your catalog. There are unrelated
+audio *datasets* (podcast transcripts, speech corpora) but no source for these
+stories.
+
+Lakehouse Federation would be the other route, and `CONNECTION_MONGODB is not
+enabled` on this workspace. So the catalog keeps coming from MongoDB through
+`scripts/seed.py`, which is the correct path anyway.
+
 ---
 
 ## 10. Tests

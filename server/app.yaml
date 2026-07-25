@@ -1,0 +1,28 @@
+# Databricks Apps manifest.
+#
+# Apps runs the command below inside a managed container and routes traffic to
+# $DATABRICKS_APP_PORT. Secrets arrive as environment variables from the same
+# `pockettaste` scope the batch jobs use, so nothing is duplicated.
+command:
+  - uvicorn
+  - app.main:app
+  - --host
+  - 0.0.0.0
+  - --port
+  - $DATABRICKS_APP_PORT
+
+env:
+  - name: DB_URL
+    valueFrom: mongo_uri
+  - name: OPENAI_KEY
+    valueFrom: openai_key
+  - name: JWT_SECRET
+    valueFrom: jwt_secret
+  - name: MONGO_DB_NAME
+    value: Click
+  - name: STORIES_COLLECTION
+    value: stories
+  # The API is one container, so the loop would run once per replica. Keep the
+  # scheduled work in the Databricks job, which has exactly one owner.
+  - name: BACKGROUND_PIPELINE_ENABLED
+    value: "false"

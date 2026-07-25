@@ -1,0 +1,25 @@
+# Dependencies for the Databricks Apps deployment.
+#
+# Same as requirements.txt, minus two things:
+#   * GOAT is installed from a git URL, which the Apps builder cannot fetch. The
+#     copilot degrades to staged prompts and reports that in `generated_by`.
+#   * pytest is a dev dependency.
+#
+# numpy is pinned here, unlike the batch tier. Apps runs a plain Python container
+# with no preinstalled Spark core packages to conflict with.
+
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+pydantic==2.10.4
+pydantic-settings==2.7.1
+
+pymongo==4.15.3
+PyJWT==2.10.1
+email-validator==2.2.0
+
+openai==1.99.9
+haystack-ai==2.31.0
+numpy==2.2.1
+
+python-dotenv==1.0.1
+httpx==0.27.2

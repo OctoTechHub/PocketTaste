@@ -27,6 +27,7 @@ from __future__ import annotations
 import argparse
 import base64
 import sys
+import time
 from pathlib import Path
 
 import httpx
@@ -128,6 +129,92 @@ class Databricks:
         raise RuntimeError("Could not create the job with either compute type.")
 
 
+APP_NAME = "pockettaste-api"
+
+
+def deploy_app(client: "Databricks", root: Path, user: str, settings) -> int:
+    """Host the FastAPI service itself on Databricks Apps.
+
+    Apps runs the container and puts workspace SSO in front of it, so the API is
+    reachable by anyone in the workspace and by nobody else. A personal access token
+    will not open it — Apps expects an OAuth session, which is the point.
+
+    Two differences from a local run, both in `app.yaml`:
+      * secrets arrive as environment variables from the same `pockettaste` scope the
+        batch jobs use, so there is one place to rotate them;
+      * the background loop is disabled, because a scheduled job should have exactly
+        one owner and that owner is the Databricks job, not an API replica.
+    """
+    import secrets as _secrets
+
+    base = f"/Users/{user}/pockettaste-app"
+    logger.info("Deploying the API to Databricks Apps at %s", base)
+
+    client.ensure_secret(SECRET_SCOPE, "mongo_uri", settings.mongo_uri)
+    client.ensure_secret(SECRET_SCOPE, "openai_key", settings.openai_secret or "")
+    client.ensure_secret(
+        SECRET_SCOPE, "jwt_secret", settings.jwt_secret or _secrets.token_urlsafe(48)
+    )
+
+    existing = client.call("GET", f"/api/2.0/apps/{APP_NAME}")
+    if existing.status_code == 404:
+        created = client.call(
+            "POST", "/api/2.0/apps",
+            json={"name": APP_NAME, "description": "PocketTaste creator-intelligence API"},
+        )
+        if created.status_code != 200:
+            logger.error("apps/create -> %s %s", created.status_code, created.text[:300])
+            return 1
+        logger.info("App created. Waiting for compute...")
+        for _ in range(40):
+            state = client.call("GET", f"/api/2.0/apps/{APP_NAME}").json()
+            if state.get("compute_status", {}).get("state") == "ACTIVE":
+                break
+            time.sleep(15)
+
+    files = [
+        (path, path.relative_to(root).as_posix())
+        for path in sorted((root / "app").rglob("*.py"))
+        if "__pycache__" not in path.parts
+    ]
+    files += [(root / "app.yaml", "app.yaml"), (root / "requirements-app.txt", "requirements.txt")]
+
+    made: set[str] = set()
+    for path, relative in files:
+        target = f"{base}/{relative}"
+        parent = target.rsplit("/", 1)[0]
+        if parent not in made:
+            client.mkdirs(parent)
+            made.add(parent)
+        client.upload(target, path.read_bytes())
+    logger.info("Uploaded %d files.", len(files))
+
+    response = client.call(
+        "POST", f"/api/2.0/apps/{APP_NAME}/deployments",
+        json={"source_code_path": f"/Workspace{base}"},
+    )
+    if response.status_code != 200:
+        logger.error("deployment -> %s %s", response.status_code, response.text[:300])
+        return 1
+
+    deployment_id = response.json()["deployment_id"]
+    for _ in range(60):
+        status = client.call(
+            "GET", f"/api/2.0/apps/{APP_NAME}/deployments/{deployment_id}"
+        ).json().get("status", {})
+        if status.get("state") in ("SUCCEEDED", "FAILED", "STOPPED"):
+            logger.info("Deployment %s: %s", status.get("state"), status.get("message"))
+            break
+        time.sleep(15)
+
+    app = client.call("GET", f"/api/2.0/apps/{APP_NAME}").json()
+    logger.info("")
+    logger.info("App   : %s", app.get("app_status", {}).get("state"))
+    logger.info("URL   : %s", app.get("url"))
+    logger.info("Access: workspace SSO. Open the URL in a browser; a PAT will not work.")
+    return 0
+
+
 def collect_sources(root: Path) -> list[tuple[Path, str]]:
     files: list[tuple[Path, str]] = []
     for directory in SOURCE_DIRS:
@@ -176,6 +263,8 @@ def main(args: argparse.Namespace) -> int:
     logger.info("tasks     : %s", [task["task_key"] for task in spec["tasks"]])
     logger.info("sources   : %d python files to upload", len(sources))
 
+    if args.app:
+        return deploy_app(client, root, user, settings)
     if args.status:
         return _status(client, spec["name"])
     if args.delete:
@@ -259,4 +348,8 @@ if __name__ == "__main__":
     parser.add_argument("--run-now", action="store_true", help="Trigger a run after deploying.")
     parser.add_argument("--status", action="store_true", help="Show the deployed job and recent runs.")
     parser.add_argument("--delete", action="store_true", help="Delete the deployed job.")
+    parser.add_argument(
+        "--app", action="store_true",
+        help="Host the FastAPI service on Databricks Apps instead of deploying the batch job.",
+    )
     raise SystemExit(main(parser.parse_args()))
