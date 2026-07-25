@@ -1,0 +1,26 @@
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+pydantic==2.10.4
+pydantic-settings==2.7.1
+
+# pymongo >= 4.13 ships a GA native async driver (AsyncMongoClient); motor is deprecated.
+pymongo==4.15.3
+
+# Auth. Passwords use stdlib scrypt, so no hashing dependency is needed.
+PyJWT==2.10.1
+email-validator==2.2.0
+
+openai==1.99.9
+haystack-ai==2.31.0
+numpy==2.2.1
+
+# Story copilot. Not on PyPI, so installed from source. Its `transformers` dependency
+# is pulled in for a tokenizer we never load (we pass backend="llama.cpp" to skip it)
+# -- no torch, no model weights.
+goat_storytelling_agent @ git+https://github.com/GOAT-AI-lab/GOAT-Storytelling-Agent.git@75637b176d1fb2341d6d813b2d8dca217638cbfc
+
+python-dotenv==1.0.1
+httpx==0.27.2
+
+pytest==8.3.4
+pytest-asyncio==0.25.2
