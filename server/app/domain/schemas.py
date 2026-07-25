@@ -106,6 +106,10 @@ class ContentResponse(ApiModel):
     is_synthetic: bool
     published_at: datetime
     transcript_chars: int
+    #: Real upstream aggregates (plays, likes, rating, narrator, ...). Empty for
+    #: items created through the API. Surfaced so the client can show measured
+    #: popularity instead of inventing it.
+    popularity: dict = Field(default_factory=dict)
 
     @classmethod
     def from_domain(cls, item: ContentItem) -> "ContentResponse":
@@ -123,6 +127,7 @@ class ContentResponse(ApiModel):
             is_synthetic=item.is_synthetic,
             published_at=item.published_at,
             transcript_chars=len(item.transcript),
+            popularity=item.popularity,
         )
 
 
