@@ -9,287 +9,248 @@ It does four jobs:
 3. It stops duplicate and copied uploads.
 4. It helps creators write new stories.
 
-The layer is independent. It does not replace the platform recommender. It works
-next to one.
+It is an independent layer. It works next to a platform recommender, not instead of
+one.
 
 ---
 
-## The flow
+## 1. The main flow
 
 ```mermaid
 flowchart TB
+    CAT["<b>Click.stories</b><br/>100 audio series<br/>title, genre, language, episodes, plays, likes, rating"]
+    LIS["<b>4 listener accounts</b><br/>sign in, then listen"]
+    DB[("<b>MongoDB</b><br/>content_items + activity_events")]
 
-    subgraph S1["1 - WHERE DATA COMES FROM"]
-        direction LR
-        CAT["Click.stories<br/>100 audio series<br/>title, genre, language,<br/>episodes, plays, likes, rating"]
-        LIS["Listeners<br/>4 accounts<br/>they sign in and listen"]
-    end
+    CAT -- "import, read only" --> DB
+    LIS -- "POST /activity, user from token" --> DB
 
-    subgraph S2["2 - HOW IT ENTERS - FastAPI"]
-        direction LR
-        IMP["scripts.seed<br/>reads the catalog<br/>never writes to it"]
-        AUTH["POST /auth/login<br/>bearer token"]
-        EV["POST /activity<br/>user comes from the token"]
-    end
+    DB --> A1
 
-    subgraph S3["3 - WHERE IT IS KEPT - MongoDB"]
-        direction LR
-        CI[("content_items")]
-        AE[("activity_events")]
-    end
+    A1["<b>1. CONTENT INTELLIGENCE</b><br/>embeddings and labels, by OpenAI or Databricks<br/>builds the Haystack search index<br/><i>gives content_profiles</i>"]
+    A2["<b>2. INGESTION</b> - no AI, so no cost<br/>retention curves, episode interest<br/>taste vectors, listen sequences<br/><i>gives content_features, user_profiles</i>"]
+    A3["<b>3. INSIGHT</b><br/>demand against supply, per genre and language<br/><i>gives creator_insights</i>"]
 
-    subgraph S4["4 - THE PIPELINE - 3 agents in order"]
-        direction TB
-        A1["AGENT 1 - CONTENT INTELLIGENCE<br/>reads the story text<br/>makes 2 embeddings and the labels<br/>builds the search index<br/>OUT content_profiles"]
-        A2["AGENT 2 - INGESTION<br/>reads the events - no AI<br/>retention curves, episode interest<br/>taste vectors, listen sequences<br/>OUT content_features, user_profiles"]
-        A3["AGENT 3 - INSIGHT<br/>compares demand with supply<br/>per genre and language<br/>writes the creator briefs<br/>OUT creator_insights"]
-        A1 --> A2 --> A3
-    end
+    A1 --> A2 --> A3 --> API
 
-    subgraph S5["5 - WHAT YOU GET"]
-        direction TB
-        R1["POST /me/recommendations<br/>8 signals, then MMR"]
-        R2["POST /discovery/search<br/>keyword + vector search"]
-        R3["POST /similarity/check<br/>6 signals, block or review"]
-        R4["GET /creator/opportunities<br/>which genre needs more content"]
-        R5["POST /copilot/draft<br/>outline and scene text"]
-    end
-
-    subgraph AI["AI PROVIDERS - swap with 2 env vars"]
-        direction TB
-        OAI["OpenAI<br/>embeddings + chat"]
-        DBX["Databricks models<br/>gte-large-en + llama-3.3-70b<br/>included in the workspace"]
-        HAY["Haystack<br/>hybrid search index"]
-        GOAT["GOAT agent<br/>story writer"]
-    end
-
-    subgraph NIGHT["6 - NIGHTLY - Databricks, not in the request path"]
-        direction TB
-        J1["refresh_embeddings"] --> J2["rebuild_clusters"] --> J3["similarity_sweep"]
-        J4["aggregate_features"] --> J5["evaluate_ranker"]
-        J2 --> J5
-        DELTA[("Delta tables<br/>workspace.pockettaste")]
-        J3 --> DELTA
-        J5 --> DELTA
-    end
-
-    CAT -->|"import, read only"| IMP --> CI
-    LIS --> AUTH --> EV --> AE
-
-    CI --> A1
-    AE --> A2
-    A1 -.->|"profiles"| A2
-
-    OAI -.-> A1
-    DBX -.-> A1
-    OAI -.-> A3
-    DBX -.-> A3
-    A1 -.->|"builds"| HAY
-
-    A1 --> R1
-    A2 --> R1
-    A3 --> R4
-    HAY -.-> R2
-    HAY -.-> R3
-    A1 --> R3
-    GOAT -.-> R5
-    A3 -.->|"demand context"| R5
-
-    LOOP["Background loop - every 15 min<br/>runs Agent 2 and Agent 3 only<br/>no AI, so no cost<br/>skips when no new events"]
-    LOOP -.-> A2
-
-    CI --> NIGHT
-    AE --> NIGHT
+    API{{"<b>FastAPI</b>"}}
+    API --> R1["<b>/me/recommendations</b><br/>8 signals, then MMR"]
+    API --> R2["<b>/discovery/search</b><br/>keyword + vector, Haystack"]
+    API --> R3["<b>/similarity/check</b><br/>6 signals, block or review"]
+    API --> R4["<b>/creator/opportunities</b><br/>which genre needs more"]
+    API --> R5["<b>/copilot/draft</b><br/>GOAT writes outline and text"]
 
     classDef src fill:#e8f0fe,stroke:#4285f4,color:#111
     classDef store fill:#fff4e5,stroke:#f59e0b,color:#111
     classDef agent fill:#e9f7ef,stroke:#28a745,color:#111
     classDef out fill:#f3e8fd,stroke:#8b5cf6,color:#111
-    classDef ext fill:#fdecea,stroke:#dc3545,color:#111
-
     class CAT,LIS src
-    class CI,AE,DELTA store
-    class A1,A2,A3,LOOP agent
+    class DB store
+    class A1,A2,A3 agent
     class R1,R2,R3,R4,R5 out
-    class OAI,DBX,HAY,GOAT ext
 ```
 
-Start at `GET /` for the list of all endpoints.
+The three agents run in that order because each one needs the one before it. Taste
+vectors are built from content embeddings. Demand is built from behaviour features.
 
-### How one recommendation is built
+Trigger it with `POST /pipeline/run`. A background loop also runs steps 2 and 3
+every 15 minutes. That loop uses no AI, and it skips when no new event arrived, so it
+costs nothing.
+
+---
+
+## 2. How one recommendation is built
 
 ```mermaid
 flowchart LR
-    U["Listener<br/>bearer token"] --> P["user_profiles<br/>taste vector<br/>listen sequence"]
-    P --> GEN["Pick candidates<br/>from 100 stories"]
-
-    GEN --> SCORE["Score each one"]
-
-    subgraph SIG["8 signals - weights add to 1.0"]
-        direction TB
-        T["FROM THE TEXT<br/>affinity 0.26<br/>originality 0.07"]
-        B["FROM BEHAVIOUR<br/>retention 0.18<br/>co-occurrence 0.14<br/>sequence 0.10<br/>genre affinity 0.10"]
-        M["FROM METADATA<br/>freshness 0.08<br/>exploration 0.07"]
-    end
-
-    SCORE --> SIG
-    SIG --> MMR["MMR<br/>drop near-copies<br/>of what is already picked"]
-    MMR --> DUP["Remove re-uploads<br/>keep the first upload"]
-    DUP --> OUT["Ranked list<br/>each item shows<br/>its own signal values"]
+    U["Listener<br/>bearer token"] --> C["Pick candidates<br/>from 100 stories"]
+    C --> S["Score each one"]
+    S --> TXT["<b>From the text</b><br/>affinity 0.26<br/>originality 0.07"]
+    S --> BEH["<b>From behaviour</b><br/>retention 0.18<br/>co-occurrence 0.14<br/>sequence 0.10<br/>genre affinity 0.10"]
+    S --> MET["<b>From metadata</b><br/>freshness 0.08<br/>exploration 0.07"]
+    TXT --> M["MMR<br/>drop near-copies"]
+    BEH --> M
+    MET --> M
+    M --> D["Remove re-uploads<br/>keep the first upload"]
+    D --> OUT["Ranked list<br/>each item shows its own<br/>signal values"]
 
     classDef sig fill:#e9f7ef,stroke:#28a745,color:#111
     classDef res fill:#f3e8fd,stroke:#8b5cf6,color:#111
-    class T,B,M sig
+    class TXT,BEH,MET sig
     class OUT res
 ```
 
----
+Behaviour gives 0.52 of the score. Text gives 0.33. Text is what covers a new story
+that nobody has played yet.
 
-## What we use, and why
+**The sequence signal** asks what comes next, not who liked both. The exact pair "A
+then B" is rare, so it falls back in three steps and stops at the first answer:
 
-| Tool | Where | Why |
+| step | what it uses | value |
 |---|---|---|
-| **FastAPI + MongoDB** | Online | It answers a request in milliseconds. |
-| **Haystack** | Search | It runs keyword search and vector search together. It joins the two lists by rank. |
-| **OpenAI** | Labels, text | It labels the stories and writes the briefs. It never picks a number. |
-| **GOAT** | Copilot | The real package writes the outline and the scenes. |
-| **Databricks** | Nightly | It runs the slow jobs. The API never calls it. |
-| **Sarvam AI** | Optional | It can write Hindi text. It is off now. |
+| 1 | we saw "A then B" | full |
+| 2 | we saw "A then X", and B is like X | 80% |
+| 3 | we saw "crime in Hindi, then suspense in Hindi" | 50% |
+
+Step 3 is what makes it work with few listeners. A real match always beats a guess.
 
 ---
 
-## How the recommender scores a story
+## 3. Databricks
 
-Eight signals. Each signal has a published weight. The weights add up to 1.0.
+```mermaid
+flowchart LR
+    subgraph NIGHT["Nightly job - 5 tasks, deployed and green"]
+        direction TB
+        J1["refresh_embeddings"] --> J2["rebuild_clusters"] --> J3["similarity_sweep"]
+        J4["aggregate_features"] --> J5["evaluate_ranker"]
+        J2 --> J5
+    end
 
-| Signal | Source | Weight |
-|---|---|---|
-| affinity | story text | 0.26 |
-| retention | listener behaviour | 0.18 |
-| co-occurrence | listener behaviour | 0.14 |
-| **sequence** | listener behaviour | 0.10 |
-| genre affinity | listener behaviour | 0.10 |
-| freshness | publish date | 0.08 |
-| originality | duplicate check | 0.07 |
-| exploration | play count | 0.07 |
+    MG[("MongoDB")] --> NIGHT
+    NIGHT --> DL[("Delta tables<br/>workspace.pockettaste")]
 
-Behaviour gives 0.52. Text gives 0.33. Text covers a new story that nobody played.
+    subgraph HOST["Also on Databricks"]
+        direction TB
+        APP["<b>Apps</b><br/>hosts this FastAPI service<br/>behind workspace SSO"]
+        FM["<b>Foundation models</b><br/>gte-large-en, llama-3.3-70b<br/>included, so inference is free"]
+    end
 
-**The sequence signal** asks a different question. Co-occurrence asks "who liked
-both?". Sequence asks "what comes next?". For a serial story, the order matters.
-
-The exact pair "A then B" is rare. So the signal uses three steps. It stops at the
-first step that gives an answer:
-
-1. We saw "A then B". Use it. Full value.
-2. We saw "A then X", and B is like X. Use it. 80 percent value.
-3. We saw "crime in Hindi, then suspense in Hindi". Use it. 50 percent value.
-
-Step 3 makes the signal work with few listeners. A real match always beats a guess.
-
----
-
-## The similarity gate
-
-The gate stops the problem in the brief. One story goes up many times with new
-names.
-
-It uses six signals. The strongest one is the **story skeleton**. We ask OpenAI for
-the premise, the conflict, and the ending. We remove all the names. Then we embed
-that text.
-
-A copy that changes every word keeps the same skeleton.
-
-Our test on a heavy rewrite:
-
-```
-  word overlap    0.099   <- a normal copy check finds nothing
-  story skeleton  0.924   <- this finds it
+    classDef store fill:#fff4e5,stroke:#f59e0b,color:#111
+    classDef ext fill:#fdecea,stroke:#dc3545,color:#111
+    class MG,DL store
+    class APP,FM ext
 ```
 
-The gate blocks an exact copy. It also blocks a title match after it removes
-"Season 3" or "The End". Other cases go to a person.
-
----
-
-## The background loop
-
-The pipeline runs every 15 minutes. It costs nothing.
-
-- It runs Agent 2 and Agent 3 only. Both use no AI.
-- It skips the run if no new event arrived.
-- Agent 1 is not in the loop. Agent 1 costs money. You start it by hand.
-
----
-
-## Databricks
-
-Databricks is the nightly tier. It is not in the request path. The API works when
+The nightly job runs the slow work: embedding refresh, full-catalog clustering, and
+the all-pairs duplicate sweep. It is **not** in the request path. The API works when
 Databricks is down.
-
-Five jobs run in this order:
-
-```
-  refresh_embeddings --> rebuild_clusters --> similarity_sweep
-  aggregate_features -----------------------> evaluate_ranker
-```
 
 The jobs import the same code as the API. Two copies of the same maths would drift.
 
-**Status: deployed. All five jobs pass in 160 seconds.** They write four Delta
-tables.
+**Live now:**
+
+| | |
+|---|---|
+| Job | `pockettaste-nightly-intelligence`, all 5 tasks pass in 160s |
+| App | <https://pockettaste-api-7474647028679809.aws.databricksapps.com> |
+| Delta | `content_profiles`, `content_clusters`, `content_features`, `evaluation_runs` |
+
+Open the app URL in a browser. A token will not work, because Apps sits behind
+workspace SSO.
+
+Set `EMBEDDING_PROVIDER=databricks` and `LLM_PROVIDER=databricks` to move inference
+off OpenAI. Both are verified working and cost nothing extra.
 
 ---
 
-## Data
+## 4. The similarity gate
+
+The gate stops one story going up many times under new names.
+
+It uses six signals. The strongest is the **story skeleton**: we ask a model for the
+premise, the conflict, and the ending, remove all the names, then embed that. A copy
+that changes every word keeps the same skeleton.
+
+Measured on a heavy rewrite:
+
+```
+word overlap    0.099   <- a normal copy check finds nothing
+story skeleton  0.924   <- this finds it
+```
+
+It blocks an exact copy. It blocks a title match after it removes "Season 3" or "The
+End". Everything else goes to a person.
+
+---
+
+## 5. What we use
+
+| Tool | Where | Why |
+|---|---|---|
+| FastAPI + MongoDB | Online | It answers a request in milliseconds. |
+| Haystack | Search | Keyword and vector search together, joined by rank. |
+| OpenAI **or** Databricks | Labels, text | Writes labels and briefs. It never picks a number. |
+| GOAT | Copilot | The real package writes the outline and the scenes. |
+| Databricks | Nightly, hosting | Slow jobs, Delta tables, and it hosts the API. |
+| Sarvam AI | Optional | Can write Hindi text. Off now. |
+
+---
+
+## 6. Data
 
 | What | Count | Real? |
 |---|---|---|
 | Stories | 100 | Real. From `Click.stories`. We only read it. |
 | Accounts | 4 | Real. |
 | Events | 42 | Real. The four users made these. |
-| Events | 663 | Simulated. Marked `is_synthetic=true`. |
+| Events | ~19,200 | Simulated. Marked `is_synthetic=true`. |
 
 We never send audio or video. We read the story text and the event rows only.
 
-Every report has a `provenance` field. It says `mixed` now. It tells you what kind
-of data made the numbers.
+Every report carries a `provenance` field. It says `mixed` now, and it tells you what
+kind of data made the numbers. `scripts/clean_data.py --apply` strips the simulated
+rows back out.
 
 ---
 
-## What is done
+## 7. Every ask, and where it is built
 
-- [x] Import the real catalog
-- [x] Sign-in with email and password
-- [x] Event log tied to the account
-- [x] Three agents and the pipeline
-- [x] Recommender with 8 signals and MMR
-- [x] Sequence signal with three-step backoff
-- [x] Similarity gate with 6 signals
-- [x] Demand report for creators
-- [x] GOAT copilot: outline and scenes
-- [x] Background loop with no AI cost
-- [x] Databricks jobs, deployed
-- [x] 139 tests
+| The brief asked for | What we built | Where |
+|---|---|---|
+| Backend only, FastAPI | 52 endpoints, layered, 139 tests | `app/api` |
+| Haystack + OpenAI for discovery | Keyword and vector search, joined by rank | `services/discovery.py` |
+| MongoDB for normal storage | 9 collections, async driver | `data/` |
+| Databricks to automate the pipeline | Nightly job, live and green | `databricks/jobs` |
+| "How they interact, when they left, which part they took again" | Retention curve, drop-off point, per-episode replay and interest | `services/feature_builder.py` |
+| Logs saved and sent to the AI | Event log to Mongo, then to the 3 agents | `agents/` |
+| A few agents, low or no budget | 3 agents. Free loop every 15 min. Free Databricks inference | `agents/`, `services/scheduler.py` |
+| "This genre has demand, users do not have this content" | Demand against supply per genre and language | `/creator/opportunities` |
+| Real metrics: how many users want what | Listener counts, plays, completion, failed searches, on every row | `/insights/demand` |
+| Similarity score to stop the "Season 3" re-upload | 6 signals, story-skeleton match | `services/similarity.py` |
+| GOAT for storytelling | The real package, outline and scene text | `services/goat_agent.py` |
+| Sarvam AI scope | Wired as an Indic-language provider, off by default | `services/llm.py` |
+| "No fake or fabricated things" | Provenance and confidence on every number | `domain/provenance.py` |
+
+Two things we added because the data asked for them:
+
+- **Sign-in.** Events are tied to an account, so listening is attributable and one
+  caller cannot write into another person's history.
+- **Duplicate suppression in the ranker.** Finding a re-upload is pointless if the
+  recommender still promotes it over the original.
 
 ---
 
-## Limits
+## 8. Real data and simulated data
 
-Read this before you present.
+The brief said the engineer must not fabricate anything. That is enforced in code,
+not by good intent.
 
-1. **Four listeners is too few.** Every demand row says `confidence: low`. The
-   system reports this itself. It does not hide it.
-2. **No transcripts.** The catalog holds a summary, not a script. So we understand
-   the metadata. We do not understand the audio.
-3. **Episode times are estimates.** We divide the total time by the episode count.
-4. **This is not better than NVIDIA Merlin.** Merlin ranks better. Our layer does
-   jobs that Merlin does not do.
+Every number carries a `provenance` tag and a `confidence` label:
+
+| Tag | Meaning |
+|---|---|
+| `real` | Real catalog, real logged events |
+| `simulated_from_real_catalog` | Real catalog and real plays, likes and ratings. The per-listener stream is rebuilt from them |
+| `synthetic_simulation` | Both invented, for testing |
+| `mixed` | A blend. Filter before you use it |
+
+The catalog stores totals, not a per-listener log. So the listener stream is rebuilt
+from each story's real plays, likes and rating. Relative demand between the 100
+titles is therefore grounded in real numbers.
+
+The LLM never picks a number. It writes prose from figures the pipeline computed. A
+row with too small a sample says `confidence: low` instead of sounding confident.
+`scripts/clean_data.py --apply` strips every simulated row back out.
+
+**On positioning.** This is a layer, not a ranker replacement. A production
+recommender trained on years of data will out-rank us. It will not tell a creator
+which genre is starving, catch a re-titled re-upload, or draft the next series. Those
+are the jobs here.
 
 ---
 
 ## Run it
 
 See **[server/RUNNING.md](server/RUNNING.md)**.
-
 For the full design, see **[server/README.md](server/README.md)**.
