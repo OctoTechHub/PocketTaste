@@ -1,12 +1,7 @@
 "use client";
 // beui.dev/components/motion/button
 
-import {
-  AnimatePresence,
-  motion,
-  useReducedMotion,
-  type HTMLMotionProps,
-} from "motion/react";
+import { AnimatePresence, motion, type HTMLMotionProps } from "motion/react";
 import {
   forwardRef,
   type PointerEvent,
@@ -18,6 +13,7 @@ import {
 import { EASE_OUT, SPRING_PRESS } from "@/lib/ease";
 import { cn } from "@/lib/utils";
 import { useHoverCapable } from "@/lib/hooks/use-hover-capable";
+import { useSafeReducedMotion } from "@/lib/hooks/use-reduced-motion";
 
 export type ButtonVariant = "primary" | "secondary" | "ghost" | "outline";
 export type ButtonSize = "sm" | "md" | "lg" | "icon";
@@ -65,7 +61,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
     },
     ref,
   ) {
-    const reduce = useReducedMotion();
+    const reduce = useSafeReducedMotion();
     const canHover = useHoverCapable();
     const [ripples, setRipples] = useState<Ripple[]>([]);
     const nextId = useRef(0);

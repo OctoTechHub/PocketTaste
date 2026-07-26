@@ -2,12 +2,7 @@
 // beui.dev/components/motion/button
 
 import { Check, Loader2, X } from "lucide-react";
-import {
-  AnimatePresence,
-  motion,
-  useReducedMotion,
-  type Variants,
-} from "motion/react";
+import { AnimatePresence, motion, type Variants } from "motion/react";
 import {
   forwardRef,
   type ReactNode,
@@ -15,6 +10,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { useSafeReducedMotion } from "@/lib/hooks/use-reduced-motion";
 import { EASE_OUT, SPRING_SWAP } from "@/lib/ease";
 import { Button, type ButtonProps } from "./base";
 
@@ -69,7 +65,7 @@ const ICON_VARIANTS: Variants = {
 };
 
 function IconSlot({ keyId, children }: { keyId: string; children: ReactNode }) {
-  const reduce = useReducedMotion();
+  const reduce = useSafeReducedMotion();
   return (
     <motion.span
       key={keyId}
@@ -92,7 +88,7 @@ function TextSlot({
   value: string;
   children: ReactNode;
 }) {
-  const reduce = useReducedMotion();
+  const reduce = useSafeReducedMotion();
   const measureRef = useRef<HTMLSpanElement>(null);
   const [width, setWidth] = useState<number>();
   const label = typeof children === "string" ? children : null;

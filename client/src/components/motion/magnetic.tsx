@@ -1,9 +1,10 @@
 "use client";
 
-import { motion, useMotionValue, useReducedMotion, useSpring } from "motion/react";
+import { motion, useMotionValue, useSpring } from "motion/react";
 import { useRef, type ReactNode } from "react";
 import { SPRING_MOUSE } from "@/lib/ease";
 import { useHoverCapable } from "@/lib/hooks/use-hover-capable";
+import { useSafeReducedMotion } from "@/lib/hooks/use-reduced-motion";
 import { cn } from "@/lib/utils";
 
 export interface MagneticProps {
@@ -14,7 +15,7 @@ export interface MagneticProps {
 
 export function Magnetic({ children, strength = 0.35, className }: MagneticProps) {
   const ref = useRef<HTMLDivElement>(null);
-  const reduce = useReducedMotion();
+  const reduce = useSafeReducedMotion();
   const canHover = useHoverCapable();
   // Decorative cursor-follow: skip on touch (phantom hover) and reduced motion.
   const enabled = !reduce && canHover;

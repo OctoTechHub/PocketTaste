@@ -56,9 +56,24 @@ function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise
   });
 }
 
-function joinSceneText(data: unknown): string {
-  return arr(asRec(data).scenes)
-    .map((s) => str(asRec(s).text))
+/** Text to narrate: full scene prose if it exists (from `/copilot/draft`), else
+ * the chapter beats (from the much cheaper `/copilot/outline` — no scene-writing
+ * calls at all). Letting either shape flow through the same path is what lets
+ * the automated pipeline use the fast outline while the manual "Write draft"
+ * button still gets full prose. */
+function extractNarrationText(data: unknown): string {
+  const rec = asRec(data);
+  const scenes = arr(rec.scenes);
+  if (scenes.length) {
+    return scenes.map((s) => str(asRec(s).text)).join("\n\n");
+  }
+  return arr(rec.chapters)
+    .map((c) => {
+      const chapter = asRec(c);
+      return [str(chapter.title), str(chapter.beat), str(chapter.hook)]
+        .filter(Boolean)
+        .join(". ");
+    })
     .join("\n\n");
 }
 
@@ -70,12 +85,12 @@ function buildPublishBody(
   narrateData: Rec,
   ctx: { genre: string; premise: string; workingTitle: string; fallbackLanguage: string },
 ): ContentCreate {
-  const sceneText = joinSceneText(draftData);
+  const narrationText = extractNarrationText(draftData);
   const narrateResult = asRec(narrateData);
   const narrateStage = asRec(narrateResult.narrate);
   const localizeStage = asRec(narrateResult.localize);
   const finalLanguage = str(narrateResult.final_language, ctx.fallbackLanguage);
-  const finalText = localizeStage.ran ? str(localizeStage.text) : sceneText;
+  const finalText = localizeStage.ran ? str(localizeStage.text) : narrationText;
   const title = (str(draftData.working_title) || ctx.workingTitle || ctx.premise).slice(0, 200).trim();
 
   return {
@@ -95,7 +110,7 @@ type AutoStage = "idle" | "drafting" | "narrating" | "publishing" | "done" | "er
 
 const AUTO_STAGE_LABEL: Record<AutoStage, string> = {
   idle: "",
-  drafting: "Writing the draft with GOAT…",
+  drafting: "Generating the outline with GOAT…",
   narrating: "Running the Sarvam finishing stage (polish, localize, narrate)…",
   publishing: "Publishing the finished story…",
   done: "Published — redirecting to the home page…",
@@ -154,7 +169,9 @@ export function CopilotPanel({ seed }: { seed: CopilotSeed | null }) {
     setAutoSeedId(seed.seedId);
     setAutoStage("drafting");
     setAutoError("");
-    setMode("draft");
+    // The auto pipeline uses the outline endpoint (see effect below) — no scene
+    // prose, ~3x faster — and narrates the chapter beats instead.
+    setMode("outline");
     setDraftLanguage(seed.language);
   }
 
@@ -166,34 +183,44 @@ export function CopilotPanel({ seed }: { seed: CopilotSeed | null }) {
 
   useEffect(() => {
     if (!seed || startedSeedId.current === seed.seedId) return;
-    startedSeedId.current = seed.seedId;
-    let cancelled = false;
+    const seedId = seed.seedId;
+    startedSeedId.current = seedId;
+
+    // Abandon-if-superseded is checked against the ref itself, NOT a per-run
+    // closure flag: Next's dev server runs Strict Mode, which deliberately
+    // mounts -> cleans up -> remounts every effect once. A closure-scoped
+    // `cancelled` flag set by that spurious cleanup would kill the one real
+    // chain right after its first await, every time, in dev. The ref persists
+    // across that remount and only ever changes when a genuinely different
+    // seed is picked, so checking against it is safe in both dev and prod.
+    const stillCurrent = () => startedSeedId.current === seedId;
+
     (async () => {
       try {
+        // Outline, not draft: GOAT's book-spec + plot-chapters stages only —
+        // skips scene-splitting and scene-writing entirely (each a full
+        // creative-generation LLM call), measured ~3x faster in practice. The
+        // automated pipeline narrates the chapter beats instead of scene prose.
         const draftData = (await withTimeout(
-          draft.mutateAsync({
+          outline.mutateAsync({
             premise: seed.premise,
             working_title: seed.workingTitle,
             genre: seed.genre,
             language: seed.language,
-            target_chapters: 5,
+            target_chapters: 8,
             tone: "",
-            // 1 scene, not 2: writing prose is GOAT's slowest stage by far (a full
-            // creative-generation LLM call each), and the automated pipeline only
-            // needs enough text to narrate — the outline still has all 5 chapters.
-            scenes_to_write: 1,
           }),
-          150_000,
-          "Writing the draft",
+          90_000,
+          "Generating the outline",
         )) as Rec;
-        if (cancelled) return;
+        if (!stillCurrent()) return;
 
-        const sceneText = joinSceneText(draftData);
-        if (!sceneText) {
+        const narrationText = extractNarrationText(draftData);
+        if (!narrationText) {
           setAutoStage("error");
           setAutoError(
             str(draftData.notice) ||
-              "The draft came back with no scene text (often the similarity gate blocked it) — nothing to narrate.",
+              "The outline came back with no chapters (often the similarity gate blocked it) — nothing to narrate.",
           );
           return;
         }
@@ -202,14 +229,14 @@ export function CopilotPanel({ seed }: { seed: CopilotSeed | null }) {
         const supported = SARVAM_TTS_LANGUAGES.has(seed.language);
         const narrateData = (await withTimeout(
           narrate.mutateAsync({
-            text: sceneText,
+            text: narrationText,
             language: supported ? seed.language : "en",
             localize_to: supported ? null : "hi",
           }),
           150_000,
           "The Sarvam finishing stage",
         )) as Rec;
-        if (cancelled) return;
+        if (!stillCurrent()) return;
 
         setAutoStage("publishing");
         const body = buildPublishBody(draftData, narrateData, {
@@ -219,22 +246,18 @@ export function CopilotPanel({ seed }: { seed: CopilotSeed | null }) {
           fallbackLanguage: seed.language,
         });
         await withTimeout(upload.mutateAsync({ body }), 30_000, "Publishing");
-        if (cancelled) return;
+        if (!stillCurrent()) return;
 
         setAutoStage("done");
         setTimeout(() => {
-          if (!cancelled) router.push("/");
+          if (stillCurrent()) router.push("/");
         }, 1200);
       } catch (err) {
-        if (cancelled) return;
+        if (!stillCurrent()) return;
         setAutoStage("error");
         setAutoError(err instanceof Error ? err.message : "Automation failed.");
       }
     })();
-
-    return () => {
-      cancelled = true;
-    };
     // draft/narrate/upload are stable mutation objects from React Query, and
     // startedSeedId (a ref) intentionally isn't a dependency — only a new `seed`
     // identity should ever (re-)run this.
@@ -253,8 +276,10 @@ export function CopilotPanel({ seed }: { seed: CopilotSeed | null }) {
   const result = asRec(active.data);
   const chapterBeats = arr(result.chapters).map(asRec);
   const characters = arr(result.characters).map(asRec);
-  const sceneText = joinSceneText(active.data);
-  const canNarrate = mode === "draft" && draft.isSuccess && sceneText.length > 0;
+  const narrationText = extractNarrationText(active.data);
+  // Either mode can be narrated now: outline gives chapter beats (fast), draft
+  // gives full scene prose (slower, more expensive, more polished audio).
+  const canNarrate = active.isSuccess && narrationText.length > 0;
   const isAutomating = autoStage !== "idle" && autoStage !== "error" && autoStage !== "done";
 
   const narrateResult = asRec(narrate.data);
@@ -318,6 +343,7 @@ export function CopilotPanel({ seed }: { seed: CopilotSeed | null }) {
             type="button"
             onClick={() => {
               setMode("outline");
+              setDraftLanguage(language);
               outline.mutate(req());
             }}
             disabled={outline.isPending || premise.length < 10}
@@ -364,7 +390,7 @@ export function CopilotPanel({ seed }: { seed: CopilotSeed | null }) {
               type="button"
               onClick={() =>
                 narrate.mutate({
-                  text: sceneText,
+                  text: narrationText,
                   language: draftLanguage,
                   localize_to: targetLanguage || null,
                 })

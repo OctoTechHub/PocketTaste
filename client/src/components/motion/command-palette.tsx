@@ -2,7 +2,7 @@
 // beui.dev/components/blocks/command-palette
 /* eslint-disable react-hooks/set-state-in-effect -- vendored beui component; mount guard and query reset are intentional. */
 
-import { motion, useReducedMotion } from "motion/react";
+import { motion } from "motion/react";
 import { Search, type LucideIcon } from "lucide-react";
 import {
   type ReactNode,
@@ -15,6 +15,7 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import { EASE_OUT } from "@/lib/ease";
+import { useSafeReducedMotion } from "@/lib/hooks/use-reduced-motion";
 import { cn } from "@/lib/utils";
 
 export type CommandItem = {
@@ -94,7 +95,7 @@ export function CommandPalette({
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
   const uid = useId();
-  const reduce = useReducedMotion();
+  const reduce = useSafeReducedMotion();
   const updateQuery = useCallback(
     (value: string) => {
       if (!queryControlled) setInternalQuery(value);
