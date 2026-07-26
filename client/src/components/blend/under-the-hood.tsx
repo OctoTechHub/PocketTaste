@@ -43,7 +43,11 @@ export function UnderTheHood({
   stages: BlendStage[];
   isStreaming: boolean;
 }) {
-  const [open, setOpen] = useState(true);
+  // Open while the engine is working — that is the moment the panel earns its
+  // space — then fold away so the feed, not a finished log, owns the page. A
+  // click pins it either way: an explicit choice outranks the default forever.
+  const [pinned, setPinned] = useState<boolean | null>(null);
+  const open = pinned ?? isStreaming;
   const scroller = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -55,7 +59,7 @@ export function UnderTheHood({
     <section className="overflow-hidden rounded-2xl border border-border bg-card">
       <button
         type="button"
-        onClick={() => setOpen((value) => !value)}
+        onClick={() => setPinned(!open)}
         aria-expanded={open}
         aria-controls="blend-log"
         className="flex min-h-11 w-full items-center gap-2.5 px-4 text-left transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
@@ -87,43 +91,61 @@ export function UnderTheHood({
       </button>
 
       {open ? (
-        <div
-          id="blend-log"
-          ref={scroller}
-          role="log"
-          aria-live="polite"
-          aria-busy={isStreaming}
-          className="h-[168px] overflow-y-auto border-t border-border px-4 py-2.5 font-mono text-[11px] leading-[1.7]"
-        >
-          {stages.length === 0 ? (
-            <p className="text-muted-foreground">waiting for the server…</p>
-          ) : (
-            <ol className="space-y-0.5">
-              {stages.map((stage, index) => (
-                <li key={`${stage.step}-${index}`} className="flex gap-2.5">
-                  <span className="w-12 shrink-0 text-right tabular-nums text-muted-foreground/60">
-                    {stage.elapsed_ms}ms
-                  </span>
-                  <span
-                    className={cn(
-                      "w-[104px] shrink-0 truncate",
-                      stage.step === "done" ? "text-primary" : "text-muted-foreground",
-                    )}
-                  >
-                    {STEP_LABEL[stage.step] ?? stage.step}
-                  </span>
-                  <span className="min-w-0 flex-1 text-foreground/85">
-                    {stage.message}
-                    {detailOf(stage) ? (
-                      <span className="block break-all text-muted-foreground/70">
-                        {detailOf(stage)}
+        // The log autoscrolls, so the top line is usually cut mid-entry. The mask
+        // turns that clipped edge into a deliberate fade instead of looking broken.
+        <div className="relative border-t border-border">
+          <div
+            aria-hidden
+            className="pointer-events-none absolute inset-x-0 top-0 z-10 h-6 bg-gradient-to-b from-card to-transparent"
+          />
+          <div
+            id="blend-log"
+            ref={scroller}
+            role="log"
+            aria-live="polite"
+            aria-busy={isStreaming}
+            className="h-[168px] overflow-y-auto px-4 py-2.5 font-mono text-[11px] leading-[1.7]"
+          >
+            {stages.length === 0 ? (
+              <p className="text-muted-foreground">waiting for the server…</p>
+            ) : (
+              <ol className="space-y-0.5">
+                {stages.map((stage, index) => {
+                  const done = stage.step === "done";
+                  return (
+                    <li key={`${stage.step}-${index}`} className="flex gap-2.5">
+                      <span className="w-12 shrink-0 text-right tabular-nums text-muted-foreground/60">
+                        {stage.elapsed_ms}ms
                       </span>
-                    ) : null}
-                  </span>
-                </li>
-              ))}
-            </ol>
-          )}
+                      <span
+                        className={cn(
+                          "flex w-[104px] shrink-0 items-center gap-1.5 truncate",
+                          done ? "font-semibold text-primary" : "text-muted-foreground",
+                        )}
+                      >
+                        <span
+                          aria-hidden
+                          className={cn(
+                            "h-1 w-1 shrink-0 rounded-full",
+                            done ? "bg-primary" : "bg-border",
+                          )}
+                        />
+                        {STEP_LABEL[stage.step] ?? stage.step}
+                      </span>
+                      <span className="min-w-0 flex-1 text-foreground/85">
+                        {stage.message}
+                        {detailOf(stage) ? (
+                          <span className="block break-all text-muted-foreground/70">
+                            {detailOf(stage)}
+                          </span>
+                        ) : null}
+                      </span>
+                    </li>
+                  );
+                })}
+              </ol>
+            )}
+          </div>
         </div>
       ) : null}
     </section>
