@@ -16,6 +16,29 @@ from app.services.auth_service import AuthenticationError
 #: FastAPI's, keeping every error response consistent.
 bearer_scheme = HTTPBearer(auto_error=False, description="Bearer token from POST /auth/login")
 
+#: Behind the Databricks Apps OAuth proxy the Authorization header is spent on
+#: the workspace check before the request reaches us, so the login token arrives
+#: here instead. Ignored on a direct run, where Authorization survives intact.
+APP_TOKEN_HEADER = "X-App-Authorization"
+
+
+def _bearer_token(
+    request: Request, credentials: HTTPAuthorizationCredentials | None
+) -> str | None:
+    """The account token, from wherever this deployment let it through.
+
+    The relayed header wins when set. Only the frontend proxy sends it, and only
+    with an account token — whereas Authorization, on a request that reached us
+    through the Apps proxy, holds the workspace token and would never resolve.
+    """
+    relayed = request.headers.get(APP_TOKEN_HEADER, "")
+    scheme, _, token = relayed.partition(" ")
+    if scheme.lower() == "bearer" and token.strip():
+        return token.strip()
+    if credentials is not None and credentials.credentials:
+        return credentials.credentials
+    return None
+
 
 def get_container(request: Request) -> Container:
     container: Container | None = getattr(request.app.state, "container", None)
@@ -41,9 +64,10 @@ async def get_current_account(
 ) -> UserAccount:
     """Resolve the bearer token to a live account, or 401."""
     container = require_storage(request)
-    if credentials is None or not credentials.credentials:
+    token = _bearer_token(request, credentials)
+    if token is None:
         raise AuthenticationError("Missing bearer token. Sign in via POST /auth/login.")
-    return await container.auth.resolve_token(credentials.credentials)
+    return await container.auth.resolve_token(token)
 
 
 async def get_optional_account(
@@ -51,11 +75,12 @@ async def get_optional_account(
     credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(bearer_scheme)],
 ) -> UserAccount | None:
     """For endpoints that personalise when signed in but still work anonymously."""
-    if credentials is None or not credentials.credentials:
+    token = _bearer_token(request, credentials)
+    if token is None:
         return None
     try:
         container = require_storage(request)
-        return await container.auth.resolve_token(credentials.credentials)
+        return await container.auth.resolve_token(token)
     except (AuthenticationError, DependencyUnavailableError):
         return None
 
