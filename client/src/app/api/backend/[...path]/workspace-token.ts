@@ -34,14 +34,24 @@ const EXPIRY_MARGIN_MS = 120_000;
 
 export class WorkspaceTokenError extends Error {}
 
+/** Which deployment is talking, so a local pass and a hosted failure are distinguishable. */
+const ENVIRONMENT = process.env.VERCEL_ENV ?? process.env.NODE_ENV ?? "unknown";
+
 /**
  * Names the missing piece rather than listing every variable. The failure modes
  * here are all invisible from the outside — a PAT, a half-filled service
  * principal and no config at all produce the same login redirect.
+ *
+ * Only for failures *after* a token was obtained. A rejection at the token
+ * endpoint is an authentication problem and is described by mint() instead;
+ * conflating the two sends you hunting for a grant that was never the issue.
  */
 export function credentialsDiagnosis(): string {
   if (HAS_CLIENT_CREDENTIALS) {
-    return "The service principal is configured but Databricks would not accept it — check it has CAN_USE on the app.";
+    return (
+      "The service principal authenticated, so the credentials are right — but the app " +
+      "refused it. Grant that service principal CAN_USE on the app."
+    );
   }
   if (IS_PAT) {
     return (
@@ -98,8 +108,17 @@ async function mint(): Promise<string> {
 
   if (!response.ok || !payload?.access_token) {
     const reason = payload?.error_description ?? payload?.error ?? `HTTP ${response.status}`;
+    // This is authentication, not authorisation: the id/secret pair itself was
+    // rejected, so CAN_USE is irrelevant and naming it wastes the reader's time.
+    // The id and the secret's length identify which copy of the credentials is
+    // loaded, which is the only thing that distinguishes one environment's
+    // working config from another's. The secret itself is never emitted.
     throw new WorkspaceTokenError(
-      `Databricks refused the service principal: ${reason.replace(/\.$/, "")}.`,
+      `Databricks rejected the client id/secret pair: ${reason.replace(/\.$/, "")}. ` +
+        `The ${ENVIRONMENT} environment sent client_id ${CLIENT_ID ?? "(unset)"} with a ` +
+        `${CLIENT_SECRET?.length ?? 0}-character secret. Check DATABRICKS_CLIENT_ID and ` +
+        `DATABRICKS_CLIENT_SECRET where this is deployed — they are read from the ` +
+        `environment, not from .env, which is gitignored and never ships.`,
     );
   }
 

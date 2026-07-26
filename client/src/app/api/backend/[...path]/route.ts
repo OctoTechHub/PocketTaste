@@ -136,8 +136,10 @@ async function forward(req: NextRequest, path: string[]): Promise<Response> {
   try {
     headers = await upstreamHeaders(req);
   } catch (cause) {
+    // Already a complete diagnosis — appending the post-mint one would blame a
+    // missing grant for what is actually a bad id/secret.
     if (cause instanceof WorkspaceTokenError) {
-      return envelope(`${cause.message} ${credentialsDiagnosis()}`, 502, { upstream: UPSTREAM });
+      return envelope(cause.message, 502, { upstream: UPSTREAM });
     }
     throw cause;
   }
