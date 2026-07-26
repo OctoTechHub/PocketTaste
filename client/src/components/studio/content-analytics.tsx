@@ -2,6 +2,7 @@
 
 import { Loader } from "@/components/motion/loader";
 import { useContentDropOff } from "@/hooks/api/use-analytics";
+import { RetentionChart } from "./insights-charts";
 import { arr, asRec, num, pct, str, Card, Meter, Pill } from "./ui";
 
 /** Retention curve + plain-English drop-off diagnosis for one story. */
@@ -42,24 +43,12 @@ export function ContentAnalytics({ contentId }: { contentId: string }) {
         <Metric label="Sample" value={String(num(d.sample_size))} />
       </div>
 
-      {curve.length > 0 ? (
+      {curve.length > 1 ? (
         <div>
           <p className="mb-2 text-xs uppercase tracking-wide text-muted-foreground">
             Retention curve
           </p>
-          <div className="flex items-end gap-0.5" style={{ height: 64 }}>
-            {curve.map((point, i) => {
-              const retained = num(point.retained ?? point.retention ?? point.share, 0);
-              return (
-                <span
-                  key={i}
-                  title={`${Math.round(retained * 100)}%`}
-                  className="flex-1 rounded-t bg-primary/70"
-                  style={{ height: `${Math.max(2, retained * 100)}%` }}
-                />
-              );
-            })}
-          </div>
+          <RetentionChart curve={curve} />
         </div>
       ) : null}
 

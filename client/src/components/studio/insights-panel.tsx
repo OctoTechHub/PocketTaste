@@ -2,6 +2,7 @@
 
 import { Loader } from "@/components/motion/loader";
 import { useBriefs, useDemand, useSaturation } from "@/hooks/api/use-creator";
+import { DemandChart, SaturationChart } from "./insights-charts";
 import {
   arr,
   asRec,
@@ -48,7 +49,12 @@ export function InsightsPanel() {
       <ProvenanceNote provenance={d.provenance} notice={d.data_notice} />
 
       <section>
-        <SectionTitle title="Demand by segment" subtitle="Genre × language, demand vs supply." />
+        <SectionTitle title="Demand by segment" subtitle="Where your audience is — top segments by listeners." />
+        {segments.length ? (
+          <Card className="mb-4">
+            <DemandChart segments={segments} />
+          </Card>
+        ) : null}
         {segments.length ? (
           <div className="overflow-x-auto rounded-xl border border-white/10">
             <table className="w-full text-sm">
@@ -80,7 +86,12 @@ export function InsightsPanel() {
       </section>
 
       <section>
-        <SectionTitle title="Saturated patterns" subtitle="Over-supplied relative to retention." />
+        <SectionTitle title="Saturated patterns" subtitle="Over-supplied relative to how well they retain." />
+        {patterns.length ? (
+          <Card className="mb-4">
+            <SaturationChart patterns={patterns} />
+          </Card>
+        ) : null}
         {patterns.length ? (
           <div className="flex flex-wrap gap-2">
             {patterns.map((p, i) => (
@@ -104,7 +115,7 @@ export function InsightsPanel() {
               <Card key={i}>
                 <div className="flex items-center justify-between gap-2">
                   <p className="font-semibold text-foreground">{str(b.title ?? b.segment)}</p>
-                  <Pill>{str(b.generated_by, "brief")}</Pill>
+                  <Pill tone="good">AI brief</Pill>
                 </div>
                 <p className="mt-1 text-sm text-muted-foreground">
                   {str(b.premise ?? b.rationale ?? b.summary)}
