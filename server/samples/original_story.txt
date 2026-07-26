@@ -1,0 +1,16 @@
+TITLE: Namak Ka Bahi-Khata
+LANGUAGE: hi
+GENRES: thriller
+DURATION_SECONDS: 20000
+
+DESCRIPTION:
+1890 ke Bombay mein ek andha munshi namak ke vyapar ka hisaab rakhta hai. Ek din use
+ek purana khata milta hai jiske panne khaali nahin hain.
+
+STORY:
+Vithal ki aankhein bachpan mein chali gayi thin, par ungliyan syahi ki umar pehchan
+leti hain. Namak ke godaam ka har hisaab uske dimaag mein rehta hai. Us subah use jo
+khata mila, usme un logon ke karz likhe the jo abhi paida hi nahin hue. Har naam ke
+saamne ek tareekh thi, aur unme se ek tareekh kal ki thi. Jis inspector ne use kaam
+par rakha tha, woh register ke mutabik do saal pehle mar chuka hai, lekin har subah
+wahi aadmi aakar haazri lagata hai.

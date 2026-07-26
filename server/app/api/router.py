@@ -8,6 +8,7 @@ from app.api.routes import (
     activity,
     analytics,
     auth,
+    blend,
     catalog,
     copilot,
     creator,
@@ -26,6 +27,7 @@ api_router = APIRouter()
 for module in (
     health,
     auth,
+    blend,
     catalog,
     activity,
     me,

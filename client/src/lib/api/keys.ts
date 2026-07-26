@@ -11,6 +11,10 @@ export const queryKeys = {
   catalog: (params: CatalogQuery) => ["catalog", params] as const,
   content: (id: string) => ["catalog", "detail", id] as const,
 
+  blends: ["blend"] as const,
+  blend: (id: string) => ["blend", id] as const,
+  blendFeed: (id: string, limit: number) => ["blend", id, "feed", limit] as const,
+
   activityStats: ["activity", "stats"] as const,
   activitySchema: ["activity", "schema"] as const,
   recommendationWeights: ["recommendations", "weights"] as const,

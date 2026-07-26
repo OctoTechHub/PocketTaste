@@ -159,6 +159,19 @@ class RankingService:
             generated_at=utcnow(),
         )
 
+    def score_for(
+        self, user: UserProfile, items: list[ContentItem], context: RankingContext
+    ) -> dict[str, float]:
+        """Blended score per item for one listener, without selection or diversity.
+
+        `recommend` decides *what to show*: it filters, generates a candidate pool and
+        runs MMR. The blend needs the layer underneath — the same eight signals over
+        an externally chosen candidate set, with the ranking left to the caller.
+        Exposed so BlendService scores with the production ranker instead of growing
+        a parallel copy of it that could drift.
+        """
+        return {item.content_id: self._score(user, item, context)[1] for item in items}
+
     # --- stage 1: candidate generation --------------------------------------
 
     def _generate_candidates(

@@ -119,7 +119,12 @@ class StorytellingService:
             catalog,
             profiles,
             top_k=3,
-            use_llm=self._llm.available,
+            # Deterministic explanation only. The LLM narrator adds ~9s to every
+            # copilot request and it paraphrases the signals rather than reading them
+            # -- it has claimed "the titles are identical" on a report whose title
+            # signal was 0.00. The rationale strings are generated from the numbers,
+            # so they cannot contradict them.
+            use_llm=False,
         )
         demand_context = self._demand_context(genre, language, demand)
         avoid = self._avoid_patterns(demand)
@@ -215,7 +220,12 @@ class StorytellingService:
             catalog,
             profiles,
             top_k=3,
-            use_llm=self._llm.available,
+            # Deterministic explanation only. The LLM narrator adds ~9s to every
+            # copilot request and it paraphrases the signals rather than reading them
+            # -- it has claimed "the titles are identical" on a report whose title
+            # signal was 0.00. The rationale strings are generated from the numbers,
+            # so they cannot contradict them.
+            use_llm=False,
         )
         demand_context = self._demand_context(genre, language, demand)
 

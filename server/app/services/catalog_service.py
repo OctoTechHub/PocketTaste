@@ -132,6 +132,18 @@ class CatalogService:
             use_llm=use_llm,
         )
 
+    async def screening_corpus(
+        self, *, title: str, description: str, transcript: str
+    ) -> tuple[list[ContentItem], dict]:
+        """The retrieval shortlist a screening call should compare against.
+
+        The copilot used to read the whole catalog with transcripts plus every profile
+        on each request -- 3.2s before a single word was written, and it grows linearly
+        with the catalog. Retrieval already ranks the true source first, so a shortlist
+        is both faster and unchanged in outcome.
+        """
+        return await self._shortlist(title=title, description=description, transcript=transcript)
+
     async def _shortlist(
         self, *, title: str, description: str, transcript: str, top_k: int = 25
     ) -> tuple[list[ContentItem], dict]:

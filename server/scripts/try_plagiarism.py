@@ -104,6 +104,40 @@ def _show_matches(matches, *, label: str) -> None:
             print(f"      -> {match['rationale']}")
 
 
+def _read_draft(path: str) -> dict:
+    """Parse the plain-text form a creator fills in.
+
+    `KEY: value` headers, then `DESCRIPTION:` and `STORY:` blocks that run until the
+    next header. Deliberately dumb -- it has to be something a writer can type without
+    thinking about JSON.
+    """
+    text = Path(path).read_text(encoding="utf-8")
+    fields: dict[str, str] = {}
+    current: str | None = None
+    for line in text.splitlines():
+        head = line.split(":", 1)
+        key = head[0].strip().upper()
+        if len(head) == 2 and key.isupper() and key.replace("_", "").isalpha() and " " not in key:
+            current = key
+            fields[current] = head[1].strip()
+        elif current:
+            fields[current] = f"{fields[current]} {line.strip()}".strip()
+
+    missing = {"TITLE", "STORY"} - fields.keys()
+    if missing:
+        sys.exit(f"{path} is missing: {', '.join(sorted(missing))}")
+
+    genres = [g.strip() for g in fields.get("GENRES", "").split(",") if g.strip()]
+    return {
+        "title": fields["TITLE"],
+        "description": fields.get("DESCRIPTION") or fields["STORY"][:200],
+        "transcript": fields["STORY"],
+        "language": fields.get("LANGUAGE") or "hi",
+        "genres": genres or ["general"],
+        "duration_seconds": int(fields.get("DURATION_SECONDS") or 18000),
+    }
+
+
 async def _delete(content_id: str) -> None:
     from pymongo import AsyncMongoClient
 
@@ -130,6 +164,7 @@ def main() -> None:
         help="Reword the story instead of copying it verbatim.",
     )
     parser.add_argument("--keep", action="store_true", help="Do not delete an accepted upload.")
+    parser.add_argument("--file", help="Submit a creator draft from a .txt file.")
     args = parser.parse_args()
 
     status, auth = _call(args.base, "POST", "/auth/login",
@@ -137,6 +172,17 @@ def main() -> None:
     if status != 200:
         sys.exit(f"Login failed ({status}): {auth}")
     token = auth["access_token"]
+
+    if args.file:
+        draft = _read_draft(args.file)
+        _rule("=")
+        print(f"CREATOR DRAFT   {args.file}")
+        print(f"  title    {draft['title']}")
+        print(f"  blurb    {draft['description'][:110]}")
+        print(f"  story    {draft['transcript'][:110]}")
+        _rule("=")
+        _submit(args, token, draft)
+        return
 
     if args.story:
         status, detail = _call(args.base, "GET", f"/catalog/{args.story}")
@@ -165,18 +211,19 @@ def main() -> None:
     print(f"  {body[:150]}{'...' if len(body) > 150 else ''}")
     _rule("=")
 
-    status, result = _call(
-        args.base, "POST", "/catalog",
-        {
-            "title": title,
-            "description": body,
-            "transcript": body * 3,
-            "language": source.get("language", "hinglish"),
-            "genres": source.get("genres") or ["drama"],
-            "duration_seconds": source.get("duration_seconds") or 20000,
-        },
-        token,
-    )
+    _submit(args, token, {
+        "title": title,
+        "description": body,
+        "transcript": body * 3,
+        "language": source.get("language", "hinglish"),
+        "genres": source.get("genres") or ["drama"],
+        "duration_seconds": source.get("duration_seconds") or 20000,
+    })
+
+
+def _submit(args, token: str, draft: dict) -> None:
+    """Publish the draft and report whatever the gate decided."""
+    status, result = _call(args.base, "POST", "/catalog", draft, token)
 
     if status == 409:
         details = result["error"]["details"]

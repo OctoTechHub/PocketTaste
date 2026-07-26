@@ -17,8 +17,11 @@ async def outline(
 ) -> dict:
     """Screens the premise against the catalog first. If it would be blocked at
     upload, nothing is generated and the report explains why."""
-    catalog = await container.content_repo.iter_all(with_transcript=True)
-    profiles = await container.profile_repo.all_by_id()
+    catalog, profiles = await container.catalog_service.screening_corpus(
+        title=payload.working_title or payload.premise[:60],
+        description=payload.premise,
+        transcript=payload.premise,
+    )
     demand = await container.insight_repo.latest()
 
     result = await container.storytelling.outline(
@@ -60,8 +63,11 @@ async def draft(
     with what it produced. Slower and more expensive than `/outline`: one model call
     per scene.
     """
-    catalog = await container.content_repo.iter_all(with_transcript=True)
-    profiles = await container.profile_repo.all_by_id()
+    catalog, profiles = await container.catalog_service.screening_corpus(
+        title=payload.working_title or payload.premise[:60],
+        description=payload.premise,
+        transcript=payload.premise,
+    )
     demand = await container.insight_repo.latest()
 
     try:

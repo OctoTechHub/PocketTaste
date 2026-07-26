@@ -27,6 +27,7 @@ class Collections:
     SIMILARITY = "similarity_reports"
     RUNS = "pipeline_runs"
     ACCOUNTS = "user_accounts"
+    BLENDS = "blends"
 
 
 #: (collection, keys, kwargs) — created idempotently at startup.

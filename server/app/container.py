@@ -20,6 +20,7 @@ from app.core.logging import get_logger
 from app.data.mongo import MongoGateway
 from app.data.repositories import (
     ActivityRepository,
+    BlendRepository,
     ContentFeaturesRepository,
     ContentProfileRepository,
     ContentRepository,
@@ -30,6 +31,8 @@ from app.data.repositories import (
     UserProfileRepository,
 )
 from app.services.auth_service import AuthService
+from app.services.blend import BlendService
+from app.services.blend_service import BlendApplicationService
 from app.services.catalog_service import ActivityService, CatalogService
 from app.services.content_intelligence import ContentIntelligenceService
 from app.services.context_cache import RankingContextCache
@@ -64,6 +67,7 @@ class Container:
     similarity_audit_repo: SimilarityAuditRepository
     runs_repo: PipelineRunRepository
     accounts_repo: UserAccountRepository
+    blends_repo: BlendRepository
 
     # services
     embeddings: EmbeddingService
@@ -78,6 +82,8 @@ class Container:
     storytelling: StorytellingService
     goat: GoatStorytellingEngine
     sarvam_finishing: SarvamFinishingService
+    blend_algorithm: BlendService
+    blend_service: BlendApplicationService
     auth: AuthService
     catalog_service: CatalogService
     activity_service: ActivityService
@@ -112,6 +118,7 @@ def build_container(settings: Settings, gateway: MongoGateway) -> Container:
     similarity_audit_repo = SimilarityAuditRepository(gateway)
     runs_repo = PipelineRunRepository(gateway)
     accounts_repo = UserAccountRepository(gateway)
+    blends_repo = BlendRepository(gateway)
 
     embeddings = EmbeddingService(settings)
     llm = LlmService(settings)
@@ -130,6 +137,10 @@ def build_container(settings: Settings, gateway: MongoGateway) -> Container:
         settings, content_repo, profile_repo, similarity_audit_repo, similarity, discovery
     )
     activity_service = ActivityService(content_repo, activity_repo)
+    blend_algorithm = BlendService(settings, ranking)
+    blend_service = BlendApplicationService(
+        blends_repo, accounts_repo, users_repo, blend_algorithm
+    )
     cache = RankingContextCache(
         settings, content_repo, profile_repo, features_repo, activity_repo, users_repo
     )
@@ -162,6 +173,7 @@ def build_container(settings: Settings, gateway: MongoGateway) -> Container:
         similarity_audit_repo=similarity_audit_repo,
         runs_repo=runs_repo,
         accounts_repo=accounts_repo,
+        blends_repo=blends_repo,
         embeddings=embeddings,
         llm=llm,
         intelligence=intelligence,
@@ -174,6 +186,8 @@ def build_container(settings: Settings, gateway: MongoGateway) -> Container:
         storytelling=storytelling,
         goat=goat,
         sarvam_finishing=sarvam_finishing,
+        blend_algorithm=blend_algorithm,
+        blend_service=blend_service,
         auth=auth,
         catalog_service=catalog_service,
         activity_service=activity_service,

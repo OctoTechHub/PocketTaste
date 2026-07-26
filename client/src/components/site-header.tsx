@@ -12,6 +12,7 @@ import { SearchCommand } from "@/components/search/search-command";
 
 const NAV: { label: string; href: string }[] = [
   { label: "Home", href: "/" },
+  { label: "Blend", href: "/blend" },
   { label: "Creator Studio", href: "/studio" },
   { label: "Admin", href: "/admin" },
 ];

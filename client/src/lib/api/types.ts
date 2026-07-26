@@ -293,3 +293,74 @@ export interface EvaluationRequest {
 // ---------------------------------------------------------------------------
 
 export type JsonRecord = Record<string, unknown>;
+
+// ---------------------------------------------------------------------------
+// Blend — one shared feed for two listeners
+// ---------------------------------------------------------------------------
+
+export interface BlendMemberSummary {
+  user_id: string;
+  display_name: string;
+  email: string;
+  is_you: boolean;
+  is_cold_start: boolean;
+  events_observed: number;
+  /** [genre, weight], already filtered to genres with real affinity. */
+  top_genres: [string, number][];
+}
+
+export interface TasteMatch {
+  overall: number;
+  taste_vector: number;
+  genre_overlap: number;
+  language_overlap: number;
+  shared_library: number;
+  shared_titles: number;
+  basis: string;
+}
+
+export interface BlendSummary {
+  blend_id: string;
+  created_at: string;
+  created_by: string;
+  last_viewed_at: string | null;
+  members: BlendMemberSummary[];
+  taste_match: TasteMatch;
+  /** Only present on the create response. False when the blend already existed. */
+  created?: boolean;
+}
+
+export interface BlendFeedItem {
+  content_id: string;
+  title: string;
+  description: string;
+  language: string;
+  genres: string[];
+  creator_id: string;
+  duration_seconds: number;
+  score: number;
+  /** -1 = entirely the first member's taste, +1 = entirely the second's, 0 = shared. */
+  lean: number;
+  /** A member user_id, or "shared". */
+  owner: string;
+  per_member: Record<string, number>;
+  raw_per_member: Record<string, number>;
+  reason: string;
+}
+
+export interface BlendFeed {
+  blend_id: string;
+  members: BlendMemberSummary[];
+  taste_match: TasteMatch;
+  items: BlendFeedItem[];
+  mix: Record<string, number>;
+  candidate_pool_size: number;
+  provenance: string;
+  method: {
+    aggregation: string;
+    alpha?: number;
+    normalisation?: string;
+    scorer?: string;
+    why_not_average?: string;
+  };
+}

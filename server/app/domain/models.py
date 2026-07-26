@@ -274,6 +274,20 @@ class UserProfile(DomainModel):
     computed_at: datetime = Field(default_factory=utcnow)
 
 
+class Blend(DomainModel):
+    """Two listeners sharing one feed.
+
+    `member_ids` is stored sorted so that "krish adds amogh" and "amogh adds krish"
+    resolve to the same blend instead of two mirrored ones.
+    """
+
+    blend_id: str
+    member_ids: list[str]
+    created_by: str
+    created_at: datetime = Field(default_factory=utcnow)
+    last_viewed_at: datetime | None = None
+
+
 # ---------------------------------------------------------------------------
 # Similarity gate
 # ---------------------------------------------------------------------------

@@ -313,6 +313,12 @@ class StoryDraftRequest(ApiModel):
     narrate: bool = Field(default=False)
 
 
+class BlendCreate(ApiModel):
+    """Start a blend by naming the other listener's email address."""
+
+    email: str = Field(min_length=3, max_length=254)
+
+
 class NarrateRequest(ApiModel):
     """Run the Sarvam finishing stage on already-generated text, without re-running
     GOAT. Used by the "convert to voice" step in the Studio Copilot, so re-narrating

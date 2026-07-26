@@ -4,6 +4,8 @@
 import { http } from "./client";
 import type {
   AccountResponse,
+  BlendFeed,
+  BlendSummary,
   ActivityAcceptedResponse,
   ActivityCreate,
   CatalogQuery,
@@ -102,6 +104,29 @@ export const recommendationsApi = {
       .then((r) => r.data),
   weights: () =>
     http.get<JsonRecord>("/recommendations/weights").then((r) => r.data),
+};
+
+// ---------------------------------------------------------------------------
+// Blend
+// ---------------------------------------------------------------------------
+
+export const blendApi = {
+  create: (email: string) =>
+    http.post<BlendSummary>("/blend", { email }).then((r) => r.data),
+  list: () =>
+    http
+      .get<{ blends: BlendSummary[]; count: number }>("/blend")
+      .then((r) => r.data),
+  get: (blendId: string) =>
+    http.get<BlendSummary>(`/blend/${blendId}`).then((r) => r.data),
+  feed: (blendId: string, limit = 18) =>
+    http
+      .get<BlendFeed>(`/blend/${blendId}/feed`, { params: { limit } })
+      .then((r) => r.data),
+  method: (blendId: string) =>
+    http.get<JsonRecord>(`/blend/${blendId}/method`).then((r) => r.data),
+  remove: (blendId: string) =>
+    http.delete<JsonRecord>(`/blend/${blendId}`).then((r) => r.data),
 };
 
 // ---------------------------------------------------------------------------
