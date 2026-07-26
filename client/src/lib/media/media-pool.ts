@@ -1,30 +1,31 @@
-// Media resolver for artwork only.
+// Media resolver. Everything here comes from the backend — no hardcoded audio.
 //
-// The backend catalog is an intelligence layer and carries no artwork, so covers and
-// banners are seeded from content_id via picsum — the same convention the upstream
-// `stories` docs use.
+// Audio is NOT resolved here: real narration is served by the API at
+// GET /catalog/{id}/audio (Sarvam TTS, base64 WAV) and wired in on the watch page via
+// useAudioClip. This module used to hash the content id into a pool of stock
+// instrumental tracks so that every tile "played", which read as a broken product and
+// hid the fact that the catalogue had no audio at all. A story with no narration
+// simply has no audio — we never substitute a placeholder track.
 //
-// Audio is deliberately NOT resolved here. This module used to hash the content id
-// into a pool of stock instrumental tracks so that every tile "played". That was the
-// wrong trade: a Hinglish horror story opening with royalty-free guitar reads as a
-// broken product, and it concealed the fact that the catalogue had no audio at all.
-//
-// Real narration now exists — Sarvam Bulbul reads each story's own text in its own
-// language — and it is served from `GET /catalog/{id}/audio`, fetched on the watch
-// page. A story without narration renders as having none rather than borrowing
-// someone else's music.
+// Cover/banner reconstruct the exact picsum URL the upstream `stories` docs store
+// (seeded by content_id), so a tile shows the same art the catalog holds.
 
-/** Always undefined: audio comes from the API, never from a stock pool. */
-export function mediaFor(): undefined {
+/**
+ * No hardcoded audio — narration comes from the backend or not at all.
+ *
+ * The content id is accepted but ignored, so existing call sites that still pass one
+ * keep compiling; nothing is derived from it.
+ */
+export function mediaFor(_contentId?: string): undefined {
   return undefined;
 }
 
-/** Cover art — matches the upstream `stories.coverImage` seed convention. */
+/** Cover art — the same seed the upstream `stories.coverImage` uses. */
 export function coverFor(contentId: string): string {
   return `https://picsum.photos/seed/${encodeURIComponent(contentId)}/400/600`;
 }
 
-/** Wide banner — matches the upstream `stories.banner` seed convention. */
+/** Wide banner — the same seed the upstream `stories.banner` uses. */
 export function bannerFor(contentId: string): string {
   return `https://picsum.photos/seed/${encodeURIComponent(contentId)}-b/1280/720`;
 }
