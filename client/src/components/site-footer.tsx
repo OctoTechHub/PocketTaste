@@ -26,7 +26,7 @@ export function SiteFooter() {
         ))}
       </ul>
       <p className="mt-6 text-xs text-muted-foreground">
-        StreamHub — a demo streaming UI. Audio stories are public-domain LibriVox recordings.
+        Bolsillo — audio stories in your pocket. Recordings are public-domain LibriVox.
       </p>
     </footer>
   );

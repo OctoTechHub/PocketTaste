@@ -15,8 +15,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "StreamHub — Watch Anywhere",
-  description: "A Netflix-style streaming landing page demo built with Next.js.",
+  title: "Bolsillo — Audio Stories in Your Pocket",
+  description: "Bolsillo — a creator-intelligence audio-stories app.",
 };
 
 export default function RootLayout({

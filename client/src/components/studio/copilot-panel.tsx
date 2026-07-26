@@ -8,10 +8,9 @@ import { Button, StatefulButton, type ButtonState } from "@/components/motion/bu
 import { Loader } from "@/components/motion/loader";
 import { useUploadContent } from "@/hooks/api/use-catalog";
 import { useCopilotDraft, useCopilotNarrate, useCopilotOutline } from "@/hooks/api/use-creator";
-import { ApiError } from "@/lib/api/client";
 import type { ContentCreate, StoryOutlineRequest } from "@/lib/api/types";
 import type { CopilotSeed } from "./studio-shell";
-import { arr, asRec, str, type Rec, Card, JsonBlock, Pill, SectionTitle } from "./ui";
+import { arr, asRec, str, type Rec, Card, Pill, SectionTitle } from "./ui";
 
 /** ISO code -> label, for the "convert to voice" target-language picker. Matches
  * the backend's Sarvam-supported locale table (see sarvam_finishing.py). */
@@ -301,7 +300,7 @@ export function CopilotPanel({ seed }: { seed: CopilotSeed | null }) {
   return (
     <div className="grid gap-6 lg:grid-cols-[380px_1fr]">
       <Card className="space-y-4">
-        <SectionTitle title="Story copilot" subtitle="Screened & demand-anchored (GOAT)." />
+        <SectionTitle title="Story copilot" subtitle="Screened against the catalog & anchored to real demand." />
 
         {autoStage !== "idle" ? (
           <div
@@ -414,13 +413,12 @@ export function CopilotPanel({ seed }: { seed: CopilotSeed | null }) {
             <PublishButton onClick={publish} upload={upload} />
             {upload.isSuccess ? (
               <p className="text-sm text-emerald-400">
-                Published as {str(asRec(upload.data).content_id)} — see it under “Newly
-                Released” on the home page.
+                Published! Find it under “Newly Released” on the home page.
               </p>
             ) : null}
             {upload.isError ? (
               <p className="text-sm text-destructive">
-                {upload.error instanceof ApiError ? upload.error.message : "Publish failed."}
+                Couldn’t publish just yet. Please try again.
               </p>
             ) : null}
           </div>
@@ -434,8 +432,8 @@ export function CopilotPanel({ seed }: { seed: CopilotSeed | null }) {
             <span className="text-sm text-muted-foreground">Generating…</span>
           </Card>
         ) : active.isError ? (
-          <Card className="text-sm text-destructive">
-            {active.error instanceof Error ? active.error.message : "Generation failed."}
+          <Card className="text-sm text-muted-foreground">
+            The copilot is busy right now — give it another try in a moment.
           </Card>
         ) : active.data ? (
           <>
@@ -444,7 +442,7 @@ export function CopilotPanel({ seed }: { seed: CopilotSeed | null }) {
                 <h3 className="text-lg font-bold text-foreground">
                   {str(result.working_title, "Untitled")}
                 </h3>
-                <Pill>{str(result.generated_by, "generated")}</Pill>
+                <Pill tone="good">AI draft</Pill>
               </div>
               {str(result.logline) ? (
                 <p className="mt-1 text-sm italic text-muted-foreground">{str(result.logline)}</p>
@@ -485,24 +483,21 @@ export function CopilotPanel({ seed }: { seed: CopilotSeed | null }) {
             {narrate.data ? (
               <Card>
                 <p className="mb-3 text-xs uppercase tracking-wide text-muted-foreground">
-                  Sarvam finishing stage
+                  Voice & finishing
                 </p>
                 <div className="flex flex-wrap gap-2 text-xs">
                   <Pill tone={asRec(narrateResult.polish).ran ? "good" : "neutral"}>
-                    polish: {asRec(narrateResult.polish).ran ? "applied" : "skipped"}
+                    {asRec(narrateResult.polish).ran ? "Polished" : "Polish skipped"}
                   </Pill>
                   <Pill tone={localizeStage.ran ? "good" : "neutral"}>
-                    localize: {localizeStage.ran ? str(localizeStage.language) : "skipped"}
+                    {localizeStage.ran ? `Translated to ${str(localizeStage.language)}` : "No translation"}
                   </Pill>
                   <Pill tone={narrateStage.ran ? "good" : "bad"}>
-                    narrate: {narrateStage.ran ? "audio ready" : str(narrateStage.reason, "failed")}
+                    {narrateStage.ran ? "Voice ready" : "Voice unavailable"}
                   </Pill>
                 </div>
-                <JsonBlock data={narrate.data} label="Full finishing response" />
               </Card>
             ) : null}
-
-            <JsonBlock data={active.data} label="Full copilot response (incl. scenes / goat_trace)" />
           </>
         ) : (
           <Card className="text-sm text-muted-foreground">

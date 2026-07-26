@@ -21,7 +21,7 @@ import {
 
 /** GET /creator/performance — per-story retention, each expandable to full analytics. */
 export function PerformancePanel() {
-  const { data, isLoading, isError, error } = useCreatorPerformance();
+  const { data, isLoading, isError } = useCreatorPerformance();
   const [open, setOpen] = useState<string | null>(null);
 
   if (isLoading) {
@@ -35,8 +35,8 @@ export function PerformancePanel() {
   if (isError || !data) {
     return (
       <EmptyState
-        title="Couldn’t load performance"
-        hint={error instanceof Error ? error.message : undefined}
+        title="Your performance will appear here"
+        hint="Once your stories start getting listens, you’ll see retention and drop-off for each one."
       />
     );
   }
