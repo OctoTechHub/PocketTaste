@@ -31,13 +31,18 @@ export function SiteHeader() {
   return (
     <header
       className={cn(
-        "fixed inset-x-0 top-0 z-50 transition-colors duration-300",
-        scrolled ? "bg-background/95 backdrop-blur" : "bg-gradient-to-b from-black/80 to-transparent",
+        "fixed inset-x-0 top-0 z-50 border-b transition-colors duration-300",
+        // On paper the header can't rely on a dark scrim for separation, so it
+        // fades the page colour down over the hero and hardens to a hairline
+        // rule once you scroll past it.
+        scrolled
+          ? "border-border bg-background/85 backdrop-blur-md"
+          : "border-transparent bg-gradient-to-b from-background via-background/70 to-transparent",
       )}
     >
       <div className="flex items-center gap-6 px-4 py-3 sm:px-12">
         <Link href="/" className="flex select-none items-center gap-2">
-          <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-[0_0_18px_-2px_var(--color-primary)]">
+          <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-card">
             <AudioLines className="h-5 w-5" strokeWidth={2.75} />
           </span>
           <span className="text-2xl font-black tracking-tight text-foreground">
