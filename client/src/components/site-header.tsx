@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { AudioLines, Bell, LogOut, Search } from "lucide-react";
+
+import { ThemeToggle } from "@/components/theme-toggle";
 import { useState } from "react";
 
 import { cn } from "@/lib/utils";
@@ -85,6 +87,8 @@ export function SiteHeader() {
               ⌘K
             </kbd>
           </button>
+
+          <ThemeToggle />
 
           <button type="button" aria-label="Notifications" className="transition-opacity hover:opacity-70">
             <Bell className="h-5 w-5" />

@@ -19,12 +19,13 @@ export const metadata: Metadata = {
   description: "Bolsillo — a creator-intelligence audio-stories app.",
 };
 
-// Light-only: tell the browser so form controls, scrollbars and mobile chrome
-// match the paper surface instead of following the OS preference.
 export const viewport: Viewport = {
-  colorScheme: "light",
-  themeColor: "#fbfaf7",
+  colorScheme: "light dark",
 };
+
+// Applies the saved theme before first paint, so switching to dark never flashes
+// the light palette on reload.
+const themeInit = `try{if(localStorage.getItem('bolsillo.theme')==='dark'){document.documentElement.classList.add('dark');}}catch(e){}`;
 
 export default function RootLayout({
   children,
@@ -37,6 +38,7 @@ export default function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
+        <script dangerouslySetInnerHTML={{ __html: themeInit }} />
         <AppProviders>{children}</AppProviders>
       </body>
     </html>
