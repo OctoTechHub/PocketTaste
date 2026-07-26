@@ -35,11 +35,11 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    // The script adds `dark` to this element's class list before hydration, so
-    // React must accept the DOM's className over the one it rendered.
     <html
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      // The theme-init script adds `dark` to this element before hydration, so
+      // its class list deliberately differs from what the server rendered.
       suppressHydrationWarning
     >
       <head>
