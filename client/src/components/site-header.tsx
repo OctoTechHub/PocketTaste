@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { AudioLines, Bell, LogOut, Search } from "lucide-react";
 import { useState } from "react";
 
@@ -19,6 +20,7 @@ const NAV: { label: string; href: string }[] = [
 
 export function SiteHeader() {
   const scrolled = useScrolled();
+  const pathname = usePathname();
   const { account, isAuthenticated, logout } = useAuth();
   const [searchOpen, setSearchOpen] = useState(false);
   const [authOpen, setAuthOpen] = useState(false);
@@ -50,19 +52,28 @@ export function SiteHeader() {
           </span>
         </Link>
 
-        <nav className="hidden items-center gap-5 text-sm text-white/80 md:flex">
-          {NAV.map((item, i) => (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={cn("transition-colors hover:text-white", i === 0 && "font-semibold text-white")}
-            >
-              {item.label}
-            </Link>
-          ))}
+        <nav className="hidden items-center gap-5 text-sm text-muted-foreground md:flex">
+          {NAV.map((item) => {
+            const active = item.href === "/" ? pathname === "/" : pathname.startsWith(item.href);
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                aria-current={active ? "page" : undefined}
+                className={cn(
+                  "transition-colors hover:text-foreground",
+                  // Current section is marked by weight and ink, not colour
+                  // alone, so it survives greyscale and CVD.
+                  active && "font-semibold text-foreground underline decoration-highlight decoration-2 underline-offset-8",
+                )}
+              >
+                {item.label}
+              </Link>
+            );
+          })}
         </nav>
 
-        <div className="ml-auto flex items-center gap-4 text-white">
+        <div className="ml-auto flex items-center gap-4 text-foreground">
           <button
             type="button"
             aria-label="Search"
@@ -70,7 +81,7 @@ export function SiteHeader() {
             className="flex items-center gap-2 transition-opacity hover:opacity-70"
           >
             <Search className="h-5 w-5" />
-            <kbd className="hidden rounded border border-white/30 px-1.5 py-0.5 text-[10px] text-white/60 lg:inline-block">
+            <kbd className="hidden rounded border border-border bg-card px-1.5 py-0.5 text-[10px] text-muted-foreground lg:inline-block">
               ⌘K
             </kbd>
           </button>
@@ -82,7 +93,7 @@ export function SiteHeader() {
           {isAuthenticated ? (
             <div className="flex items-center gap-2">
               <span
-                className="flex h-8 w-8 items-center justify-center rounded bg-gradient-to-br from-chart-4 to-primary text-sm font-bold text-white"
+                className="flex h-8 w-8 items-center justify-center rounded bg-primary text-sm font-bold text-primary-foreground"
                 title={account?.email}
               >
                 {initial}
