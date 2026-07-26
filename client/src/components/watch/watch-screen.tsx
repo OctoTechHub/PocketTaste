@@ -7,7 +7,7 @@ import { useMemo } from "react";
 import { Loader } from "@/components/motion/loader";
 import { SiteHeader } from "@/components/site-header";
 import { WatchView } from "@/components/watch/watch-view";
-import { useCatalog, useContent } from "@/hooks/api/use-catalog";
+import { useAudioClip, useCatalog, useContent } from "@/hooks/api/use-catalog";
 import { contentToItem } from "@/lib/api/mappers";
 
 /**
@@ -23,7 +23,15 @@ export function WatchScreen({ id }: { id: string }) {
     primaryGenre ? { genre: primaryGenre, limit: 24 } : { limit: 24 },
   );
 
-  const video = data ? contentToItem(data.content) : null;
+  const audioClip = useAudioClip(id, Boolean(data?.content.has_audio));
+  const video = useMemo(() => {
+    if (!data) return null;
+    const item = contentToItem(data.content);
+    if (audioClip.data?.audio_base64) {
+      item.audio = `data:audio/wav;base64,${audioClip.data.audio_base64}`;
+    }
+    return item;
+  }, [data, audioClip.data]);
   const recommendations = useMemo(
     () => (related.data ?? []).filter((item) => item.id !== id).slice(0, 18),
     [related.data, id],

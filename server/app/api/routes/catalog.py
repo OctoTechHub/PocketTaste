@@ -78,3 +78,21 @@ async def get_transcript(content_id: str, container: StorageDep) -> dict:
     if item is None:
         raise NotFoundError(f"No catalog item with id '{content_id}'.")
     return {"content_id": content_id, "title": item.title, "transcript": item.transcript}
+
+
+@router.get("/{content_id}/audio", summary="Narrated audio, if any (base64 WAV)")
+async def get_audio(content_id: str, container: StorageDep) -> dict:
+    """Empty `audio_base64` means this item was never narrated through the copilot —
+    this endpoint is not a general media host, only the Sarvam finishing output."""
+    item = await container.content_repo.get(content_id)
+    if item is None:
+        raise NotFoundError(f"No catalog item with id '{content_id}'.")
+    return {
+        "content_id": content_id,
+        "title": item.title,
+        "has_audio": item.has_audio,
+        "format": "wav" if item.has_audio else None,
+        "language": item.audio_language,
+        "source": item.audio_source,
+        "audio_base64": item.audio_base64,
+    }

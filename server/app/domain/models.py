@@ -63,6 +63,16 @@ class ContentItem(DomainModel):
     #: rating, narrator...). Empty for items created through the API. These are
     #: measured facts, unlike the per-event stream, which may be simulated.
     popularity: dict = Field(default_factory=dict)
+    #: Narration produced by the Sarvam TTS finishing stage (see
+    #: `services/sarvam_finishing.py`). Empty for every item that was not narrated
+    #: through the copilot — this is not a general media host.
+    audio_base64: str = ""
+    audio_language: str = ""
+    audio_source: str = ""
+    #: Stored redundantly rather than derived from `audio_base64`: catalog list
+    #: reads project that field out (it can be hundreds of KB per item), so a
+    #: derived property would silently read as False on every list response.
+    has_audio: bool = False
 
     @property
     def primary_genre(self) -> str:

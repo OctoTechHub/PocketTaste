@@ -78,6 +78,11 @@ class ContentCreate(ApiModel):
     chapters: list[ChapterInput] = Field(default_factory=list, max_length=500)
     source: ContentSource = ContentSource.CREATOR_UPLOAD
     published_at: datetime | None = None
+    #: Set only when publishing a copilot-narrated story: the merged WAV from the
+    #: Sarvam finishing stage (see POST /copilot/narrate), base64-encoded.
+    audio_base64: str = Field(default="", max_length=30_000_000)
+    audio_language: str = Field(default="", max_length=8)
+    audio_source: str = Field(default="", max_length=40)
 
     @field_validator("genres", "tags")
     @classmethod
@@ -110,6 +115,10 @@ class ContentResponse(ApiModel):
     #: items created through the API. Surfaced so the client can show measured
     #: popularity instead of inventing it.
     popularity: dict = Field(default_factory=dict)
+    #: Whether a narrated audio file exists (fetch it via GET /catalog/{id}/audio).
+    #: The base64 itself is never included here — it can be hundreds of KB.
+    has_audio: bool = False
+    audio_language: str = ""
 
     @classmethod
     def from_domain(cls, item: ContentItem) -> "ContentResponse":
@@ -128,6 +137,8 @@ class ContentResponse(ApiModel):
             published_at=item.published_at,
             transcript_chars=len(item.transcript),
             popularity=item.popularity,
+            has_audio=item.has_audio,
+            audio_language=item.audio_language,
         )
 
 
@@ -300,6 +311,16 @@ class StoryDraftRequest(ApiModel):
     #: Synthesize TTS narration of the final (localized, if requested) text via
     #: Sarvam's Bulbul model.
     narrate: bool = Field(default=False)
+
+
+class NarrateRequest(ApiModel):
+    """Run the Sarvam finishing stage on already-generated text, without re-running
+    GOAT. Used by the "convert to voice" step in the Studio Copilot, so re-narrating
+    or re-localizing a draft doesn't cost another round of story generation."""
+
+    text: str = Field(min_length=10, max_length=200_000)
+    language: str = Field(default="en", max_length=8)
+    localize_to: str | None = Field(default=None, max_length=8)
 
 
 class ChapterBeat(ApiModel):

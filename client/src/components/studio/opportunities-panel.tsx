@@ -1,7 +1,10 @@
 "use client";
 
+import { PenLine } from "lucide-react";
+
 import { Loader } from "@/components/motion/loader";
 import { useCreatorOpportunities } from "@/hooks/api/use-creator";
+import type { CopilotSeed } from "./studio-shell";
 import {
   arr,
   asRec,
@@ -15,8 +18,15 @@ import {
   SectionTitle,
 } from "./ui";
 
+type WriteThisSeed = Omit<CopilotSeed, "seedId">;
+
 /** GET /creator/opportunities — what to write next, split write-more / write-better. */
-export function OpportunitiesPanel() {
+export function OpportunitiesPanel({
+  onWriteThis,
+}: {
+  /** Sends a segment to the Copilot tab, prefilled, and switches to it. */
+  onWriteThis: (seed: WriteThisSeed) => void;
+}) {
   const { data, isLoading, isError, error } = useCreatorOpportunities();
 
   if (isLoading) return <PanelLoader />;
@@ -57,7 +67,7 @@ export function OpportunitiesPanel() {
         {writeMore.length ? (
           <div className="grid gap-3 md:grid-cols-2">
             {writeMore.map((row, i) => (
-              <OppCard key={i} row={row} kind="more" />
+              <OppCard key={i} row={row} kind="more" onWriteThis={onWriteThis} />
             ))}
           </div>
         ) : (
@@ -70,7 +80,7 @@ export function OpportunitiesPanel() {
         {writeBetter.length ? (
           <div className="grid gap-3 md:grid-cols-2">
             {writeBetter.map((row, i) => (
-              <OppCard key={i} row={row} kind="better" />
+              <OppCard key={i} row={row} kind="better" onWriteThis={onWriteThis} />
             ))}
           </div>
         ) : (
@@ -94,34 +104,65 @@ export function OpportunitiesPanel() {
   );
 }
 
-function OppCard({ row, kind }: { row: Record<string, unknown>; kind: "more" | "better" }) {
+function OppCard({
+  row,
+  kind,
+  onWriteThis,
+}: {
+  row: Record<string, unknown>;
+  kind: "more" | "better";
+  onWriteThis: (seed: WriteThisSeed) => void;
+}) {
   const ratio = row.demand_vs_supply;
+  const segment = str(row.segment);
+  const [genre, language] = segment.split("/");
+
   return (
-    <Card>
-      <div className="flex items-start justify-between gap-2">
-        <div>
-          <p className="font-semibold text-foreground">{str(row.segment)}</p>
-          <p className="mt-0.5 text-sm text-muted-foreground">{str(row.verdict)}</p>
+    <Card className="cursor-pointer transition-colors hover:border-primary/40 hover:bg-white/5">
+      <button
+        type="button"
+        onClick={() =>
+          onWriteThis({
+            premise: `A ${genre || "story"} audio series in ${
+              language === "en" ? "English" : language || "English"
+            }. ${str(row.verdict)}`,
+            genre: genre || "fantasy",
+            language: language || "en",
+            workingTitle: "",
+          })
+        }
+        className="block w-full text-left"
+      >
+        <div className="flex items-start justify-between gap-2">
+          <div>
+            <p className="font-semibold text-foreground">{segment}</p>
+            <p className="mt-0.5 text-sm text-muted-foreground">{str(row.verdict)}</p>
+          </div>
+          {row.you_already_publish_here ? <Pill tone="good">yours</Pill> : null}
         </div>
-        {row.you_already_publish_here ? <Pill tone="good">yours</Pill> : null}
-      </div>
-      <div className="mt-3 grid grid-cols-3 gap-2 text-xs">
-        <Fact label="Demand/supply" value={ratio != null ? `${num(ratio)}×` : "—"} />
-        <Fact label="Completion" value={pct(row.completion_rate)} />
-        <Fact label="Drop-off" value={pct(row.drop_off_rate)} />
-        <Fact label="Listeners" value={String(num(row.unique_listeners))} />
-        <Fact label="Plays" value={String(num(row.plays))} />
-        <Fact
-          label="Unmet search"
-          value={String(num(row.searches_with_no_results))}
-        />
-      </div>
-      <div className="mt-3 flex items-center gap-2">
-        <Pill tone={kind === "more" ? "good" : "warn"}>
-          opportunity {num(row.opportunity_score).toFixed(2)}
-        </Pill>
-        <Pill>confidence: {str(row.confidence, "low")}</Pill>
-      </div>
+        <div className="mt-3 grid grid-cols-3 gap-2 text-xs">
+          <Fact label="Demand/supply" value={ratio != null ? `${num(ratio)}×` : "—"} />
+          <Fact label="Completion" value={pct(row.completion_rate)} />
+          <Fact label="Drop-off" value={pct(row.drop_off_rate)} />
+          <Fact label="Listeners" value={String(num(row.unique_listeners))} />
+          <Fact label="Plays" value={String(num(row.plays))} />
+          <Fact
+            label="Unmet search"
+            value={String(num(row.searches_with_no_results))}
+          />
+        </div>
+        <div className="mt-3 flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <Pill tone={kind === "more" ? "good" : "warn"}>
+              opportunity {num(row.opportunity_score).toFixed(2)}
+            </Pill>
+            <Pill>confidence: {str(row.confidence, "low")}</Pill>
+          </div>
+          <span className="inline-flex items-center gap-1 text-xs font-medium text-primary">
+            <PenLine className="h-3.5 w-3.5" /> Write this
+          </span>
+        </div>
+      </button>
     </Card>
   );
 }

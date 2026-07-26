@@ -4,7 +4,7 @@ Runs only after `StorytellingService.draft()` has produced prose AND the
 similarity/plagiarism gate has cleared it (see `storytelling.py`). Three
 independent, best-effort steps:
 
-    1. polish   - same-language editorial pass, via Sarvam's chat model (sarvam-m)
+    1. polish   - same-language editorial pass, via Sarvam's chat model
     2. localize - machine translation into an Indic language, via Sarvam's Translate API
     3. narrate  - text-to-speech, via Sarvam's Bulbul TTS API
 
@@ -18,7 +18,10 @@ or expired Sarvam key never fails the GOAT draft that already succeeded upstream
 
 from __future__ import annotations
 
+import base64
+import io
 import re
+import wave
 
 import httpx
 
@@ -55,6 +58,45 @@ names or facts. Return only the revised scene text, nothing else — no preamble
 
 Scene:
 {text}"""
+
+
+def _merge_wav_clips(clips_base64: list[str]) -> str | None:
+    """Concatenate same-format WAV clips into one playable file.
+
+    Every clip in a `narrate()` call comes from the same TTS request configuration
+    (speaker, model, target language), so they share sample rate, channel count and
+    bit depth. That makes this a plain PCM-frame concatenation with one rewritten
+    header — not a byte-level splice, which would corrupt the audio. Returns None
+    if a clip fails to decode or the formats actually differ, so the caller can
+    fall back to reporting the clips separately instead of serving a broken file.
+    """
+    if not clips_base64:
+        return None
+    try:
+        frames: list[bytes] = []
+        params: tuple | None = None
+        for encoded in clips_base64:
+            with wave.open(io.BytesIO(base64.b64decode(encoded))) as reader:
+                clip_params = reader.getparams()[:4]  # nchannels, sampwidth, framerate, nframes
+                if params is None:
+                    params = clip_params
+                elif clip_params[:3] != params[:3]:
+                    logger.warning("Sarvam TTS clips have mismatched formats; cannot merge")
+                    return None
+                frames.append(reader.readframes(reader.getnframes()))
+
+        buffer = io.BytesIO()
+        with wave.open(buffer, "wb") as writer:
+            nchannels, sampwidth, framerate, _ = params
+            writer.setnchannels(nchannels)
+            writer.setsampwidth(sampwidth)
+            writer.setframerate(framerate)
+            for chunk in frames:
+                writer.writeframes(chunk)
+        return base64.b64encode(buffer.getvalue()).decode("ascii")
+    except (wave.Error, EOFError) as exc:
+        logger.warning("Failed to merge Sarvam TTS clips: %s", exc)
+        return None
 
 
 def _chunk_text(text: str, limit: int) -> list[str]:
@@ -127,7 +169,13 @@ class SarvamFinishingService:
         result = await self._llm.complete_text(
             _POLISH_PROMPT.format(text=text[:6000]),
             provider="sarvam",
-            max_tokens=min(2200, max(300, int(len(text.split()) * 1.6))),
+            # sarvam-30b is a reasoning model: it spends tokens on reasoning_content
+            # before the actual reply, and verified live testing shows it can burn
+            # 1500+ tokens reasoning about a single sentence even at
+            # reasoning_effort="low" — there is no reliable budget that guarantees
+            # non-empty content. `polish` degrades to the original text below when
+            # that happens, so this is a soft no-op, not a failure.
+            max_tokens=min(4000, max(1200, int(len(text.split()) * 3))),
             temperature=0.3,
         )
         if not result.ok or not result.text:
@@ -182,10 +230,10 @@ class SarvamFinishingService:
     async def narrate(self, text: str, *, language: str) -> dict:
         """Text-to-speech via Sarvam's Bulbul model.
 
-        Each chunk is synthesised independently (the API caps input length), so the
-        result is an ordered list of clips rather than one merged file — merging raw
-        WAV bytes across calls would silently corrupt the audio, so we report the
-        chunks honestly instead of faking a single continuous clip.
+        Each chunk is synthesised independently (the API caps input length), then
+        merged into one playable WAV (`audio_base64`) since every chunk shares the
+        same format. `clips` is kept too, so a format mismatch (caller can still see
+        what was synthesised even if the merge itself has to fall back.
         """
         if not text.strip():
             return {"ran": False, "reason": "empty_input"}
@@ -215,18 +263,23 @@ class SarvamFinishingService:
             logger.error("Sarvam TTS call failed: %s", exc)
             return {"ran": bool(clips), "reason": f"tts_error: {exc}", "clips": clips}
 
+        merged = _merge_wav_clips([clip["audio_base64"] for clip in clips])
         return {
             "ran": bool(clips),
             "language": language,
             "locale_code": target,
             "speaker": self._settings.sarvam_tts_speaker,
             "model": self._settings.sarvam_tts_model,
-            "format": "wav_base64_per_clip",
+            "format": "wav",
             "clip_count": len(clips),
+            "audio_base64": merged,
+            "merged": merged is not None,
             "clips": clips,
             "note": (
-                "Each clip is a separately synthesised chunk (Sarvam's TTS caps input "
-                "length); play them in sequence for continuous narration."
+                "audio_base64 is all clips merged into one WAV file."
+                if merged is not None
+                else "Clip formats did not match, so audio_base64 is unset; see clips for the "
+                "individual chunks."
             ),
         }
 

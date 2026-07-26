@@ -12,6 +12,9 @@ export type ContentItem = {
   url: string;
   /** Playable media source (audio/video). */
   audio?: string;
+  /** Set for stories narrated through the Studio copilot (Sarvam TTS). Lets the
+   * home feed show a "Newly Released" shelf without a real media host. */
+  hasAudio?: boolean;
 };
 
 export type ContentRow = {

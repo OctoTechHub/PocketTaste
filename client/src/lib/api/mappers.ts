@@ -51,6 +51,7 @@ export function contentToItem(c: ContentResponse): ContentItem {
     wideThumb: bannerFor(c.content_id),
     url: `/watch/${c.content_id}`,
     audio: mediaFor(c.content_id),
+    hasAudio: c.has_audio,
   };
 }
 

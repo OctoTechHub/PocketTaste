@@ -6,8 +6,8 @@ from app.data.mongo import Collections
 from app.data.repositories.base import BaseRepository
 from app.domain.models import ContentItem
 
-#: Transcripts are large; most read paths never need them.
-LIGHT_PROJECTION = {"transcript": 0}
+#: Transcripts and narrated audio are large; most read paths never need them.
+LIGHT_PROJECTION = {"transcript": 0, "audio_base64": 0}
 
 
 class ContentRepository(BaseRepository[ContentItem]):

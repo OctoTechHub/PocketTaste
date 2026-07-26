@@ -6,6 +6,7 @@ import { Billboard } from "@/components/billboard";
 import { ChannelMarquee } from "@/components/channel-marquee";
 import { ContentRow } from "@/components/content-row";
 import { ForYouRow } from "@/components/for-you-row";
+import { NewReleasesRow } from "@/components/new-releases-row";
 import { Loader } from "@/components/motion/loader";
 import { useCatalogRows } from "@/hooks/api/use-catalog";
 
@@ -48,6 +49,8 @@ export function CatalogHome() {
       <div className="relative z-10 -mt-16 sm:-mt-24">
         {/* Personalised rail — visible once signed in */}
         <ForYouRow />
+        {/* Stories published from the Studio copilot (Sarvam-narrated) */}
+        <NewReleasesRow />
 
         {rows.map((row, i) => (
           <Fragment key={row.id}>

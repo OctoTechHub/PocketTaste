@@ -1,7 +1,7 @@
 "use client";
 
 import { BarChart3, Lightbulb, PenLine, Sparkles, Upload } from "lucide-react";
-import { useState, type ComponentType } from "react";
+import { useRef, useState, type ComponentType } from "react";
 
 import { SiteHeader } from "@/components/site-header";
 import { useAuth } from "@/hooks/api/use-auth";
@@ -13,6 +13,16 @@ import { UploadPanel } from "./upload-panel";
 import { Card } from "./ui";
 
 type TabId = "opportunities" | "performance" | "upload" | "copilot" | "insights";
+
+export type CopilotSeed = {
+  premise: string;
+  genre: string;
+  language: string;
+  workingTitle: string;
+  /** Bumped on every selection so CopilotPanel can tell two seeds with the same
+   * text apart and re-apply the prefill even if the user picks the same row twice. */
+  seedId: number;
+};
 
 const TABS: { id: TabId; label: string; icon: ComponentType<{ className?: string }> }[] = [
   { id: "opportunities", label: "Opportunities", icon: Lightbulb },
@@ -26,6 +36,14 @@ const TABS: { id: TabId; label: string; icon: ComponentType<{ className?: string
 export function StudioShell() {
   const { isAuthenticated } = useAuth();
   const [tab, setTab] = useState<TabId>("opportunities");
+  const [copilotSeed, setCopilotSeed] = useState<CopilotSeed | null>(null);
+  const seedCounter = useRef(0);
+
+  function sendToCopilot(seed: Omit<CopilotSeed, "seedId">) {
+    seedCounter.current += 1;
+    setCopilotSeed({ ...seed, seedId: seedCounter.current });
+    setTab("copilot");
+  }
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -68,10 +86,10 @@ export function StudioShell() {
               ))}
             </nav>
 
-            {tab === "opportunities" && <OpportunitiesPanel />}
+            {tab === "opportunities" && <OpportunitiesPanel onWriteThis={sendToCopilot} />}
             {tab === "performance" && <PerformancePanel />}
             {tab === "upload" && <UploadPanel />}
-            {tab === "copilot" && <CopilotPanel />}
+            {tab === "copilot" && <CopilotPanel seed={copilotSeed} />}
             {tab === "insights" && <InsightsPanel />}
           </>
         )}

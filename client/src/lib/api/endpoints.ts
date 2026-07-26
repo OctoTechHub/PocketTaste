@@ -17,6 +17,7 @@ import type {
   JsonRecord,
   LoginRequest,
   MyRecommendationRequest,
+  NarrateRequest,
   PipelineRunRequest,
   RecommendationRequest,
   RecommendationResult,
@@ -54,6 +55,18 @@ export const catalogApi = {
       .get<{ content_id: string; title: string; transcript: string }>(
         `/catalog/${contentId}/transcript`,
       )
+      .then((r) => r.data),
+  audio: (contentId: string) =>
+    http
+      .get<{
+        content_id: string;
+        title: string;
+        has_audio: boolean;
+        format: string | null;
+        language: string;
+        source: string;
+        audio_base64: string;
+      }>(`/catalog/${contentId}/audio`)
       .then((r) => r.data),
   create: (body: ContentCreate, screen = true) =>
     http
@@ -176,11 +189,25 @@ export const creatorApi = {
 // Copilot
 // ---------------------------------------------------------------------------
 
+// GOAT's staged chain and the Sarvam finishing stage are each several sequential
+// LLM/TTS calls — comfortably past the client's default 30s timeout even though
+// the server itself isn't stuck. Override per-request rather than raising the
+// global timeout, since every other endpoint really should fail fast at 30s.
+const SLOW_GENERATION_TIMEOUT_MS = 240_000;
+
 export const copilotApi = {
   outline: (body: StoryOutlineRequest) =>
-    http.post<JsonRecord>("/copilot/outline", body).then((r) => r.data),
+    http
+      .post<JsonRecord>("/copilot/outline", body, { timeout: SLOW_GENERATION_TIMEOUT_MS })
+      .then((r) => r.data),
   draft: (body: StoryDraftRequest) =>
-    http.post<JsonRecord>("/copilot/draft", body).then((r) => r.data),
+    http
+      .post<JsonRecord>("/copilot/draft", body, { timeout: SLOW_GENERATION_TIMEOUT_MS })
+      .then((r) => r.data),
+  narrate: (body: NarrateRequest) =>
+    http
+      .post<JsonRecord>("/copilot/narrate", body, { timeout: SLOW_GENERATION_TIMEOUT_MS })
+      .then((r) => r.data),
   engine: () => http.get<JsonRecord>("/copilot/engine").then((r) => r.data),
   guardrails: () => http.get<JsonRecord>("/copilot/guardrails").then((r) => r.data),
 };

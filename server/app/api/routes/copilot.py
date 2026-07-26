@@ -6,7 +6,7 @@ from fastapi import APIRouter
 
 from app.api.deps import ContainerDep, CurrentAccount, StorageDep
 from app.core.errors import DependencyUnavailableError
-from app.domain.schemas import StoryDraftRequest, StoryOutlineRequest
+from app.domain.schemas import NarrateRequest, StoryDraftRequest, StoryOutlineRequest
 
 router = APIRouter(prefix="/copilot", tags=["copilot"])
 
@@ -83,6 +83,26 @@ async def draft(
     except RuntimeError as exc:
         raise DependencyUnavailableError(str(exc)) from exc
     return result
+
+
+@router.post(
+    "/narrate",
+    summary="Sarvam finishing stage on already-generated text (polish, localize, TTS)",
+)
+async def narrate(payload: NarrateRequest, container: ContainerDep, account: CurrentAccount) -> dict:
+    """Runs the same Sarvam finishing stage as `/copilot/draft`, but standalone.
+
+    For turning an already-written draft into voice without paying for another GOAT
+    generation: pass the drafted text back in, optionally with `localize_to` to
+    translate it into an Indic language first. Always polishes, then optionally
+    localizes, then always attempts narration.
+    """
+    return await container.sarvam_finishing.finish(
+        payload.text,
+        source_language=payload.language.lower(),
+        target_language=payload.localize_to.lower() if payload.localize_to else None,
+        narrate=True,
+    )
 
 
 @router.get("/engine", summary="Which outlining engine is active")

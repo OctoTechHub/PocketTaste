@@ -35,6 +35,15 @@ export function useTranscript(contentId: string | undefined, enabled = true) {
   });
 }
 
+/** GET /catalog/{id}/audio — narrated WAV (base64), if this item was voiced via the copilot. */
+export function useAudioClip(contentId: string | undefined, enabled = true) {
+  return useQuery({
+    queryKey: ["catalog", "audio", contentId ?? ""],
+    queryFn: () => catalogApi.audio(contentId as string),
+    enabled: enabled && Boolean(contentId),
+  });
+}
+
 /**
  * POST /catalog — upload a story. The upload is screened for duplication first
  * (409 + full similarity report when the gate blocks). The creator is taken
@@ -92,5 +101,23 @@ export function useCatalogRows(limit = 200) {
     queryKey: [...queryKeys.catalog(params), "rows"],
     queryFn: () => catalogApi.list(params),
     select: buildRows,
+  });
+}
+
+/**
+ * Stories narrated through the Studio copilot (Sarvam TTS), newest first. The
+ * backend carries no "featured" concept — this is purely `has_audio` on
+ * GET /catalog, since only copilot-published stories ever set it.
+ */
+export function useNewReleases(limit = 200) {
+  const params: CatalogQuery = { limit };
+  return useQuery({
+    queryKey: [...queryKeys.catalog(params), "new-releases"],
+    queryFn: () => catalogApi.list(params),
+    select: (items) =>
+      items
+        .filter((item) => item.has_audio)
+        .sort((a, b) => +new Date(b.published_at) - +new Date(a.published_at))
+        .map(contentToItem),
   });
 }

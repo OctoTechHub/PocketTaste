@@ -11,6 +11,7 @@ import {
 } from "@/lib/api/endpoints";
 import { queryKeys } from "@/lib/api/keys";
 import type {
+  NarrateRequest,
   SimilarityCheckRequest,
   StoryDraftRequest,
   StoryOutlineRequest,
@@ -110,6 +111,17 @@ export function useCopilotOutline() {
 export function useCopilotDraft() {
   return useMutation({
     mutationFn: (body: StoryDraftRequest) => copilotApi.draft(body),
+  });
+}
+
+/**
+ * POST /copilot/narrate — Sarvam finishing stage (polish, localize, TTS) on
+ * already-generated text, without re-running GOAT. Used by the "Convert to voice"
+ * step so re-narrating a draft doesn't cost another story generation.
+ */
+export function useCopilotNarrate() {
+  return useMutation({
+    mutationFn: (body: NarrateRequest) => copilotApi.narrate(body),
   });
 }
 

@@ -83,6 +83,10 @@ export interface ContentCreate {
   chapters?: ChapterInput[];
   source?: ContentSource;
   published_at?: string | null;
+  /** Set only when publishing a copilot-narrated story (see POST /copilot/narrate). */
+  audio_base64?: string;
+  audio_language?: string;
+  audio_source?: string;
 }
 
 export interface ContentResponse {
@@ -101,6 +105,9 @@ export interface ContentResponse {
   transcript_chars: number;
   /** Real upstream aggregates: plays, likes, rating, narrator, ... */
   popularity?: Record<string, unknown>;
+  /** Whether GET /catalog/{id}/audio has a narrated file for this item. */
+  has_audio: boolean;
+  audio_language: string;
 }
 
 export interface ContentDetailResponse {
@@ -250,6 +257,18 @@ export interface StoryOutlineRequest {
 
 export interface StoryDraftRequest extends StoryOutlineRequest {
   scenes_to_write?: number;
+  /** ISO code of an Indic language to translate the cleared draft into (Sarvam). */
+  localize_to?: string | null;
+  /** Synthesize TTS narration via Sarvam's Bulbul model as part of the draft call. */
+  narrate?: boolean;
+}
+
+/** POST /copilot/narrate — the Sarvam finishing stage on already-generated text,
+ * without re-running GOAT. */
+export interface NarrateRequest {
+  text: string;
+  language?: string;
+  localize_to?: string | null;
 }
 
 // ---------------------------------------------------------------------------

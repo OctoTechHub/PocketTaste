@@ -97,6 +97,10 @@ class CatalogService:
             is_synthetic=False,
             published_at=payload.published_at or utcnow(),
             created_at=utcnow(),
+            audio_base64=payload.audio_base64,
+            audio_language=payload.audio_language,
+            audio_source=payload.audio_source,
+            has_audio=bool(payload.audio_base64),
         )
         await self._content_repo.upsert(item)
         logger.info("Ingested content %s ('%s') from %s", item.content_id, item.title, item.creator_id)
