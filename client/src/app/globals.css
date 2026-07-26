@@ -2,11 +2,20 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 
+/* Bolsillo ships light-only. This variant is kept deliberately: it pins `dark:`
+   utilities to an explicit `.dark` ancestor (which we never render) instead of
+   Tailwind v4's default `prefers-color-scheme`, so a viewer whose OS is in dark
+   mode still gets the light theme rather than half-applied dark styles. */
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+  --color-highlight: var(--highlight);
+  --color-highlight-foreground: var(--highlight-foreground);
+  --color-success: var(--success);
+  --shadow-card: 0 1px 2px oklch(0.205 0.015 75 / 0.05), 0 10px 30px -18px oklch(0.205 0.015 75 / 0.35);
+  --shadow-lift: 0 2px 4px oklch(0.205 0.015 75 / 0.06), 0 18px 44px -20px oklch(0.205 0.015 75 / 0.45);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
   --font-heading: var(--font-geist-sans);
@@ -60,74 +69,87 @@ body {
   }
 }
 
-/* shadcn base color: slate */
-:root {
-  --radius: 0.625rem;
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.129 0.042 264.695);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.129 0.042 264.695);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.129 0.042 264.695);
-  --primary: oklch(0.208 0.042 265.755);
-  --primary-foreground: oklch(0.984 0.003 247.858);
-  --secondary: oklch(0.968 0.007 247.896);
-  --secondary-foreground: oklch(0.208 0.042 265.755);
-  --muted: oklch(0.968 0.007 247.896);
-  --muted-foreground: oklch(0.554 0.046 257.417);
-  --accent: oklch(0.968 0.007 247.896);
-  --accent-foreground: oklch(0.208 0.042 265.755);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.929 0.013 255.508);
-  --input: oklch(0.929 0.013 255.508);
-  --ring: oklch(0.704 0.04 256.788);
-  --chart-1: oklch(0.646 0.222 41.116);
-  --chart-2: oklch(0.6 0.118 184.704);
-  --chart-3: oklch(0.398 0.07 227.392);
-  --chart-4: oklch(0.828 0.189 84.429);
-  --chart-5: oklch(0.769 0.188 70.08);
-  --sidebar: oklch(0.984 0.003 247.858);
-  --sidebar-foreground: oklch(0.129 0.042 264.695);
-  --sidebar-primary: oklch(0.208 0.042 265.755);
-  --sidebar-primary-foreground: oklch(0.984 0.003 247.858);
-  --sidebar-accent: oklch(0.968 0.007 247.896);
-  --sidebar-accent-foreground: oklch(0.208 0.042 265.755);
-  --sidebar-border: oklch(0.929 0.013 255.508);
-  --sidebar-ring: oklch(0.704 0.04 256.788);
+/* The brand yellow survives the move to a light theme as a marker sweep rather
+   than as type: a hand-drawn-ish band sitting behind ink, the way you'd
+   highlight a line in a script. Reserved for the one line per page that names
+   what you're looking at. */
+@utility marker-sweep {
+  position: relative;
+  isolation: isolate;
+  color: var(--highlight-foreground);
+  &::before {
+    content: "";
+    position: absolute;
+    z-index: -1;
+    inset: -0.1em -0.45em -0.15em -0.35em;
+    background: var(--highlight);
+    border-radius: 0.15em 0.6em 0.2em 0.5em;
+    transform: rotate(-0.5deg);
+  }
 }
 
-.dark {
-  --background: oklch(0.129 0.042 264.695);
-  --foreground: oklch(0.984 0.003 247.858);
-  --card: oklch(0.208 0.042 265.755);
-  --card-foreground: oklch(0.984 0.003 247.858);
-  --popover: oklch(0.208 0.042 265.755);
-  --popover-foreground: oklch(0.984 0.003 247.858);
-  --primary: oklch(0.929 0.013 255.508);
-  --primary-foreground: oklch(0.208 0.042 265.755);
-  --secondary: oklch(0.279 0.041 260.031);
-  --secondary-foreground: oklch(0.984 0.003 247.858);
-  --muted: oklch(0.279 0.041 260.031);
-  --muted-foreground: oklch(0.704 0.04 256.788);
-  --accent: oklch(0.279 0.041 260.031);
-  --accent-foreground: oklch(0.984 0.003 247.858);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.551 0.027 264.364);
-  --chart-1: oklch(0.488 0.243 264.376);
-  --chart-2: oklch(0.696 0.17 162.48);
-  --chart-3: oklch(0.769 0.188 70.08);
-  --chart-4: oklch(0.627 0.265 303.9);
-  --chart-5: oklch(0.645 0.246 16.439);
-  --sidebar: oklch(0.208 0.042 265.755);
-  --sidebar-foreground: oklch(0.984 0.003 247.858);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.984 0.003 247.858);
-  --sidebar-accent: oklch(0.279 0.041 260.031);
-  --sidebar-accent-foreground: oklch(0.984 0.003 247.858);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.551 0.027 264.364);
+/* ---------------------------------------------------------------------------
+   Bolsillo — "Paper & Ochre"
+
+   The brand is yellow, but #facc15 measures 1.4:1 against white: it can never
+   carry text on a light surface. So the brand splits into two tokens with
+   different jobs, and nothing is left to guess:
+
+     --primary    #a56300  deep ochre. Carries type, icons, links, filled
+                           buttons. 4.6:1 on paper, 4.8:1 on card, and takes
+                           white text at 4.8:1 when used as a fill.
+     --highlight  #f9ce36  the yellow itself. Fill-only — bars, scrubbers,
+                           marker sweeps — always with ink on top (11.9:1).
+
+   Surfaces invert the usual light-theme move: the page is warm paper and cards
+   lift to pure white, so elevation reads without heavy shadows.
+   All pairings below are measured, not eyeballed.
+--------------------------------------------------------------------------- */
+:root {
+  color-scheme: light;
+  --radius: 0.625rem;
+
+  --background: oklch(0.985 0.004 95);      /* #fbfaf7  warm paper           */
+  --foreground: oklch(0.205 0.015 75);      /* #1b1610  warm ink   17.2:1    */
+  --card: oklch(1 0 0);                     /* #ffffff  lifts above the page */
+  --card-foreground: oklch(0.205 0.015 75);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.205 0.015 75);
+
+  --primary: oklch(0.56 0.13 68);           /* #a56300  ochre      4.6:1     */
+  --primary-foreground: oklch(1 0 0);       /* white on ochre      4.8:1     */
+  --highlight: oklch(0.865 0.163 92);       /* #f9ce36  fill only            */
+  --highlight-foreground: oklch(0.205 0.015 75); /* ink on yellow  11.9:1    */
+
+  --secondary: oklch(0.962 0.006 90);
+  --secondary-foreground: oklch(0.205 0.015 75);
+  --muted: oklch(0.962 0.006 90);
+  --muted-foreground: oklch(0.505 0.02 75); /* #6c6358             5.6:1     */
+  --accent: oklch(0.955 0.014 92);
+  --accent-foreground: oklch(0.205 0.015 75);
+  --destructive: oklch(0.545 0.2 27);       /* #cb2526             5.5:1     */
+  --success: oklch(0.52 0.13 155);          /* #007e46             5.2:1     */
+
+  --border: oklch(0.865 0.014 88);          /* #d6d2c8  visible on paper     */
+  --input: oklch(0.865 0.014 88);
+  --ring: oklch(0.56 0.13 68);
+
+  /* Categorical series, held in one lightness band (0.55–0.62) so no series
+     dominates by brightness, and spread far enough in hue to survive CVD. */
+  --chart-1: oklch(0.62 0.15 65);           /* amber   */
+  --chart-2: oklch(0.6 0.11 195);           /* teal    */
+  --chart-3: oklch(0.55 0.18 290);          /* violet  */
+  --chart-4: oklch(0.6 0.18 15);            /* rose    */
+  --chart-5: oklch(0.58 0.12 155);          /* green   */
+
+  --sidebar: oklch(0.975 0.005 92);
+  --sidebar-foreground: oklch(0.205 0.015 75);
+  --sidebar-primary: oklch(0.56 0.13 68);
+  --sidebar-primary-foreground: oklch(1 0 0);
+  --sidebar-accent: oklch(0.955 0.014 92);
+  --sidebar-accent-foreground: oklch(0.205 0.015 75);
+  --sidebar-border: oklch(0.865 0.014 88);
+  --sidebar-ring: oklch(0.56 0.13 68);
 }
 
 @layer base {

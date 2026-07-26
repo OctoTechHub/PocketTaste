@@ -2,6 +2,7 @@
 
 import { Loader } from "@/components/motion/loader";
 import { useBriefs, useDemand, useSaturation } from "@/hooks/api/use-creator";
+import { DemandChart, DemandTrendChart, SaturationChart } from "./insights-charts";
 import {
   arr,
   asRec,
@@ -10,7 +11,6 @@ import {
   str,
   Card,
   EmptyState,
-  JsonBlock,
   Pill,
   ProvenanceNote,
   SectionTitle,
@@ -33,8 +33,8 @@ export function InsightsPanel() {
   if (demand.isError) {
     return (
       <EmptyState
-        title="No demand report yet"
-        hint="Run the pipeline from the Admin tab, then reload."
+        title="Audience insights are on the way"
+        hint="Once there’s enough listening across the catalog, demand and saturation land here."
       />
     );
   }
@@ -49,7 +49,12 @@ export function InsightsPanel() {
       <ProvenanceNote provenance={d.provenance} notice={d.data_notice} />
 
       <section>
-        <SectionTitle title="Demand by segment" subtitle="Genre × language, demand vs supply." />
+        <SectionTitle title="Demand by segment" subtitle="Where your audience is — top segments by listeners." />
+        {segments.length ? (
+          <Card className="mb-4">
+            <DemandChart segments={segments} />
+          </Card>
+        ) : null}
         {segments.length ? (
           <div className="overflow-x-auto rounded-xl border border-white/10">
             <table className="w-full text-sm">
@@ -81,7 +86,26 @@ export function InsightsPanel() {
       </section>
 
       <section>
-        <SectionTitle title="Saturated patterns" subtitle="Over-supplied relative to retention." />
+        <SectionTitle
+          title="Completion vs drop-off"
+          subtitle="How well each top segment holds its audience."
+        />
+        {segments.length ? (
+          <Card>
+            <DemandTrendChart segments={segments} />
+          </Card>
+        ) : (
+          <EmptyState title="No retention data yet." />
+        )}
+      </section>
+
+      <section>
+        <SectionTitle title="Saturated patterns" subtitle="Over-supplied relative to how well they retain." />
+        {patterns.length ? (
+          <Card className="mb-4">
+            <SaturationChart patterns={patterns} />
+          </Card>
+        ) : null}
         {patterns.length ? (
           <div className="flex flex-wrap gap-2">
             {patterns.map((p, i) => (
@@ -105,7 +129,7 @@ export function InsightsPanel() {
               <Card key={i}>
                 <div className="flex items-center justify-between gap-2">
                   <p className="font-semibold text-foreground">{str(b.title ?? b.segment)}</p>
-                  <Pill>{str(b.generated_by, "brief")}</Pill>
+                  <Pill tone="good">AI brief</Pill>
                 </div>
                 <p className="mt-1 text-sm text-muted-foreground">
                   {str(b.premise ?? b.rationale ?? b.summary)}
@@ -119,8 +143,6 @@ export function InsightsPanel() {
           </p>
         )}
       </section>
-
-      <JsonBlock data={demand.data} label="Full demand report" />
     </div>
   );
 }

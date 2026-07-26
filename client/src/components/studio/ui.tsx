@@ -26,7 +26,13 @@ export const arr = (v: unknown): unknown[] => (Array.isArray(v) ? v : []);
 export const pct = (v: unknown): string =>
   v == null || typeof v !== "number" ? "—" : `${Math.round(v * 100)}%`;
 
-const SPOTLIGHT = "rgba(139, 140, 255, 0.14)" as const;
+/** A calm, user-facing message. Never leaks status codes, stack traces or
+ *  endpoint paths into the UI — those belong in the console, not a demo. */
+export function friendlyError(_err?: unknown, fallback = "Couldn’t load this just yet."): string {
+  return fallback;
+}
+
+const SPOTLIGHT = "rgba(250, 204, 21, 0.15)" as const;
 
 // --- motion reveal ----------------------------------------------------------
 
@@ -95,7 +101,7 @@ export function TabHeader({
         <Icon className="h-5 w-5" />
       </span>
       <div>
-        <ShinyText text={title} speed={4} className="text-xl font-bold" color="#e7e7ff" shineColor="#ffffff" />
+        <ShinyText text={title} speed={4} className="text-xl font-bold" color="#f5f5f4" shineColor="#facc15" />
         <p className="text-sm text-muted-foreground">{subtitle}</p>
       </div>
     </div>
@@ -219,22 +225,28 @@ export function JsonBlock({ data, label = "Raw response" }: { data: unknown; lab
   );
 }
 
-/** Provenance banner — never lets a synthetic figure read as real audience data. */
-export function ProvenanceNote({ provenance, notice }: { provenance?: unknown; notice?: unknown }) {
+const PROVENANCE_LABEL: Record<string, string> = {
+  real: "Live audience data",
+  synthetic_simulation: "Demo data · simulated listening",
+  simulated_from_real_catalog: "Modeled from the real catalog",
+  mixed: "Mixed live & modeled data",
+};
+
+/** Subtle, human-readable data-source chip. Keeps us honest about simulated
+ *  figures without showing raw enum values in a demo. */
+export function ProvenanceNote({ provenance }: { provenance?: unknown; notice?: unknown }) {
   const p = str(provenance);
   if (!p) return null;
   const real = p === "real";
   return (
-    <div
+    <span
       className={cn(
-        "rounded-lg border px-3 py-2 text-xs",
-        real
-          ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-200"
-          : "border-amber-500/20 bg-amber-500/10 text-amber-200",
+        "inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium",
+        real ? "bg-emerald-500/12 text-emerald-300" : "bg-white/8 text-muted-foreground",
       )}
     >
-      <span className="font-semibold">provenance: {p}</span>
-      {notice ? <span className="opacity-80"> — {str(notice)}</span> : null}
-    </div>
+      <span className={cn("h-1.5 w-1.5 rounded-full", real ? "bg-emerald-400" : "bg-amber-400")} />
+      {PROVENANCE_LABEL[p] ?? "Audience data"}
+    </span>
   );
 }

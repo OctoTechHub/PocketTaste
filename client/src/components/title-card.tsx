@@ -22,7 +22,7 @@ export function TitleCard({ title, rank }: { title: ContentItem; rank?: number }
       <TiltCard
         max={8}
         className={cn(
-          "group/card aspect-video w-[220px] rounded-lg border border-border/60 bg-muted sm:w-[300px]",
+          "group/card aspect-video w-[220px] rounded-lg border border-border bg-muted shadow-card sm:w-[300px]",
           rank !== undefined && "-ml-6",
         )}
       >
@@ -34,27 +34,30 @@ export function TitleCard({ title, rank }: { title: ContentItem; rank?: number }
           className="absolute inset-0 h-full w-full object-cover"
         />
 
-        <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/90 via-black/10 to-transparent" />
+        {/* This copy sits on cover art, not on the page, so it keeps a scrim in
+            the light theme too — tinted with the warm ink token rather than
+            pure black so it belongs to the same palette as everything else. */}
+        <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-foreground/90 via-foreground/15 to-transparent" />
 
         {title.duration && (
-          <Badge className="absolute right-2 top-2 border-0 bg-black/70 font-mono text-white tabular-nums">
+          <Badge className="absolute right-2 top-2 border-0 bg-foreground/75 font-mono text-background tabular-nums">
             {title.duration}
           </Badge>
         )}
 
         <div className="absolute inset-x-0 bottom-0 p-3">
-          <h3 className="line-clamp-2 text-sm font-semibold text-white drop-shadow-sm">
+          <h3 className="line-clamp-2 text-sm font-semibold text-background">
             {title.name}
           </h3>
-          <p className="mt-0.5 line-clamp-1 text-xs text-white/70">
+          <p className="mt-0.5 line-clamp-1 text-xs text-background/75">
             {title.channel}
             {title.views ? ` · ${title.views}` : ""}
           </p>
         </div>
 
         {/* Hover: play affordance */}
-        <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/30 opacity-0 backdrop-blur-[1px] transition-opacity duration-200 group-hover/card:opacity-100">
-          <span className="flex h-12 w-12 items-center justify-center rounded-full bg-white text-black shadow-lg">
+        <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-foreground/30 opacity-0 backdrop-blur-[1px] transition-opacity duration-200 group-hover/card:opacity-100">
+          <span className="flex h-12 w-12 items-center justify-center rounded-full bg-background text-foreground shadow-lift">
             <Play className="h-5 w-5 translate-x-px fill-current" />
           </span>
         </div>
