@@ -45,6 +45,12 @@ _LOCALE = {
     "ml": "ml-IN",
     "pa": "pa-IN",
     "od": "od-IN",
+    # Hinglish is Hindi written in Latin script, not a separate language, and it is
+    # how 39 of the catalogue's stories are stored. Bulbul reads romanised Hindi with
+    # the hi-IN voice; without this row every one of those stories is refused as
+    # "unsupported_language" and silently ends up with no narration at all.
+    "hinglish": "hi-IN",
+    "hi-en": "hi-IN",
 }
 
 #: Sarvam rejects a single Translate call over ~1000 characters.
