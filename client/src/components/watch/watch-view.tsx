@@ -62,25 +62,46 @@ export function WatchView({
               animate={{ opacity: 1, scale: 1 }}
               transition={{ duration: 0.5, ease: EASE }}
             >
-              <VideoPlayer className="rounded-xl border border-border">
-                <VideoPlayerContent
-                  ref={videoRef}
-                  slot="media"
-                  src={video.audio}
-                  poster={video.wideThumb}
-                  playsInline
-                  preload="metadata"
-                />
-                <VideoPlayerControlBar>
-                  <VideoPlayerPlayButton />
-                  <VideoPlayerSeekBackwardButton />
-                  <VideoPlayerSeekForwardButton />
-                  <VideoPlayerTimeRange />
-                  <VideoPlayerTimeDisplay showDuration />
-                  <VideoPlayerMuteButton />
-                  <VideoPlayerVolumeRange />
-                </VideoPlayerControlBar>
-              </VideoPlayer>
+              {video.audio ? (
+                <VideoPlayer className="rounded-xl border border-border">
+                  <VideoPlayerContent
+                    ref={videoRef}
+                    slot="media"
+                    src={video.audio}
+                    poster={video.wideThumb}
+                    playsInline
+                    preload="metadata"
+                  />
+                  <VideoPlayerControlBar>
+                    <VideoPlayerPlayButton />
+                    <VideoPlayerSeekBackwardButton />
+                    <VideoPlayerSeekForwardButton />
+                    <VideoPlayerTimeRange />
+                    <VideoPlayerTimeDisplay showDuration />
+                    <VideoPlayerMuteButton />
+                    <VideoPlayerVolumeRange />
+                  </VideoPlayerControlBar>
+                </VideoPlayer>
+              ) : (
+                <div className="relative aspect-video w-full overflow-hidden rounded-xl border border-border">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={video.wideThumb}
+                    alt={video.name}
+                    className="absolute inset-0 h-full w-full object-cover"
+                  />
+                  <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-background/70 px-6 text-center backdrop-blur-sm">
+                    <p className="text-sm font-semibold text-foreground">Narration coming soon</p>
+                    <p className="max-w-sm text-xs text-muted-foreground">
+                      This story hasn’t been voiced yet. Generate an AI narration for it in
+                      Creator Studio → Copilot.
+                    </p>
+                    <Link href="/studio" className="mt-1 text-xs font-medium text-primary hover:underline">
+                      Open Copilot
+                    </Link>
+                  </div>
+                </div>
+              )}
             </motion.div>
 
             <VideoDetails video={video} />
