@@ -33,7 +33,16 @@ class ContentRepository(BaseRepository[ContentItem]):
         if creator_id:
             query["creator_id"] = creator_id
         projection = None if with_transcript else LIGHT_PROJECTION
-        cursor = self.collection.find(query, projection).sort("published_at", -1).skip(offset).limit(limit)
+        # Mongo sorts full documents in memory *before* applying the projection, so
+        # a large narrated audio_base64 field can blow the 32MB sort limit even
+        # though we don't return it. Spill to disk instead of aborting.
+        cursor = (
+            self.collection.find(query, projection)
+            .sort("published_at", -1)
+            .allow_disk_use(True)
+            .skip(offset)
+            .limit(limit)
+        )
         return [ContentItem.model_validate(self._clean(doc) | {"transcript": doc.get("transcript", "")})
                 async for doc in cursor]
 

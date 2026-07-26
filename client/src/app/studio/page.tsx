@@ -1,5 +1,5 @@
-import { StudioShell } from "@/components/studio/studio-shell";
+import { redirect } from "next/navigation";
 
-export default function StudioPage() {
-  return <StudioShell />;
+export default function StudioIndex() {
+  redirect("/studio/opportunities");
 }

@@ -112,7 +112,7 @@ const AUTO_STAGE_LABEL: Record<AutoStage, string> = {
   drafting: "Generating the outline with GOAT…",
   narrating: "Running the Sarvam finishing stage (polish, localize, narrate)…",
   publishing: "Publishing the finished story…",
-  done: "Published — redirecting to the home page…",
+  done: "Published — opening your story…",
   error: "Automation stopped",
 };
 
@@ -244,12 +244,13 @@ export function CopilotPanel({ seed }: { seed: CopilotSeed | null }) {
           workingTitle: seed.workingTitle,
           fallbackLanguage: seed.language,
         });
-        await withTimeout(upload.mutateAsync({ body }), 30_000, "Publishing");
+        const published = await withTimeout(upload.mutateAsync({ body }), 30_000, "Publishing");
         if (!stillCurrent()) return;
 
+        const newId = str(asRec(published).content_id);
         setAutoStage("done");
         setTimeout(() => {
-          if (stillCurrent()) router.push("/");
+          if (stillCurrent()) router.push(newId ? `/watch/${newId}` : "/studio/insights");
         }, 1200);
       } catch (err) {
         if (!stillCurrent()) return;
