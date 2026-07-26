@@ -64,7 +64,7 @@ export function AuthDrawer({
       open={open}
       onOpenChange={onOpenChange}
       ariaLabel="Account"
-      backdropClassName="bg-foreground/45 backdrop-blur"
+      backdropClassName="bg-black/60 backdrop-blur"
       // Opaque, slightly-elevated surface so nothing bleeds through the panel.
       className="w-[420px] max-w-[92vw] gap-0 border-l border-border bg-card p-0"
     >

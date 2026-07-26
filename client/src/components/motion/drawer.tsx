@@ -63,7 +63,7 @@ export function Drawer({
             exit={{ opacity: 0 }}
             transition={{ duration: 0.25, ease: EASE_OUT }}
             className={cn(
-              "absolute inset-0 h-full w-full cursor-default bg-foreground/40 backdrop-blur-sm",
+              "absolute inset-0 h-full w-full cursor-default bg-black/50 backdrop-blur-sm",
               backdropClassName,
             )}
           />
