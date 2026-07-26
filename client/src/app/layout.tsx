@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import Script from "next/script";
 import "./globals.css";
 
 import { AppProviders } from "@/components/providers/app-providers";
@@ -35,10 +36,16 @@ export default function RootLayout({
   return (
     <html
       lang="en"
+      // The theme-init script sets the `dark` class on <html> before hydration,
+      // so the class deliberately differs from the server render. Tell React not
+      // to warn about this one element's attributes.
+      suppressHydrationWarning
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
-        <script dangerouslySetInnerHTML={{ __html: themeInit }} />
+        <Script id="theme-init" strategy="beforeInteractive">
+          {themeInit}
+        </Script>
         <AppProviders>{children}</AppProviders>
       </body>
     </html>
