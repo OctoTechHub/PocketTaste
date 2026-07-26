@@ -87,12 +87,16 @@ async def get_audio(content_id: str, container: StorageDep) -> dict:
     item = await container.content_repo.get(content_id)
     if item is None:
         raise NotFoundError(f"No catalog item with id '{content_id}'.")
+    # The blob lives in its own collection so it never rides along with catalogue
+    # reads; only this endpoint pays for it.
+    clip = await container.audio_repo.get(content_id)
     return {
         "content_id": content_id,
         "title": item.title,
-        "has_audio": item.has_audio,
-        "format": "wav" if item.has_audio else None,
-        "language": item.audio_language,
-        "source": item.audio_source,
-        "audio_base64": item.audio_base64,
+        "has_audio": clip is not None,
+        "format": clip.format if clip else None,
+        "language": clip.language if clip else item.audio_language,
+        "source": clip.source if clip else item.audio_source,
+        "bytes": clip.bytes if clip else 0,
+        "audio_base64": clip.audio_base64 if clip else "",
     }

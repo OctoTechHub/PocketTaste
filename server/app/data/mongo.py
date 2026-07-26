@@ -28,6 +28,7 @@ class Collections:
     RUNS = "pipeline_runs"
     ACCOUNTS = "user_accounts"
     BLENDS = "blends"
+    AUDIO = "content_audio"
 
 
 #: (collection, keys, kwargs) — created idempotently at startup.
@@ -35,6 +36,10 @@ _INDEXES: list[tuple[str, list[tuple[str, int]], dict]] = [
     (Collections.CONTENT, [("content_id", ASCENDING)], {"unique": True, "name": "uq_content_id"}),
     (Collections.CONTENT, [("language", ASCENDING), ("genres", ASCENDING)], {"name": "ix_lang_genre"}),
     (Collections.CONTENT, [("creator_id", ASCENDING)], {"name": "ix_creator"}),
+    # list_catalog sorts on this; without an index Mongo sorts in memory and a
+    # large collection trips the 32MB limit before the projection is applied.
+    (Collections.CONTENT, [("published_at", DESCENDING)], {"name": "ix_published"}),
+    (Collections.AUDIO, [("content_id", ASCENDING)], {"unique": True, "name": "uq_audio_content"}),
     (Collections.ACTIVITY, [("event_id", ASCENDING)], {"unique": True, "name": "uq_event_id"}),
     (Collections.ACTIVITY, [("content_id", ASCENDING), ("occurred_at", DESCENDING)], {"name": "ix_content_time"}),
     (Collections.ACTIVITY, [("user_id", ASCENDING), ("occurred_at", DESCENDING)], {"name": "ix_user_time"}),

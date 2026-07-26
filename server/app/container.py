@@ -21,6 +21,7 @@ from app.data.mongo import MongoGateway
 from app.data.repositories import (
     ActivityRepository,
     BlendRepository,
+    ContentAudioRepository,
     ContentFeaturesRepository,
     ContentProfileRepository,
     ContentRepository,
@@ -68,6 +69,7 @@ class Container:
     runs_repo: PipelineRunRepository
     accounts_repo: UserAccountRepository
     blends_repo: BlendRepository
+    audio_repo: ContentAudioRepository
 
     # services
     embeddings: EmbeddingService
@@ -119,6 +121,7 @@ def build_container(settings: Settings, gateway: MongoGateway) -> Container:
     runs_repo = PipelineRunRepository(gateway)
     accounts_repo = UserAccountRepository(gateway)
     blends_repo = BlendRepository(gateway)
+    audio_repo = ContentAudioRepository(gateway)
 
     embeddings = EmbeddingService(settings)
     llm = LlmService(settings)
@@ -174,6 +177,7 @@ def build_container(settings: Settings, gateway: MongoGateway) -> Container:
         runs_repo=runs_repo,
         accounts_repo=accounts_repo,
         blends_repo=blends_repo,
+        audio_repo=audio_repo,
         embeddings=embeddings,
         llm=llm,
         intelligence=intelligence,

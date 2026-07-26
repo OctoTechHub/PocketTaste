@@ -274,6 +274,21 @@ class UserProfile(DomainModel):
     computed_at: datetime = Field(default_factory=utcnow)
 
 
+class ContentAudio(DomainModel):
+    """Narrated audio for one story, kept off the catalogue document.
+
+    See `app/data/repositories/audio_repository.py` for why it is separate.
+    """
+
+    content_id: str
+    audio_base64: str = Field(repr=False)
+    language: str = "hi"
+    source: str = "sarvam_tts"
+    format: str = "wav"
+    bytes: int = 0
+    created_at: datetime = Field(default_factory=utcnow)
+
+
 class Blend(DomainModel):
     """Two listeners sharing one feed.
 

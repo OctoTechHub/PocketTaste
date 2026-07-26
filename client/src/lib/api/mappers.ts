@@ -1,9 +1,10 @@
 // Adapters from the server's DTOs to the UI's ContentItem shape, so the existing
 // TitleCard / Billboard / watch components render backend data unchanged.
 //
-// Media join: the backend carries no artwork or audio, so we resolve both from
-// content_id — cover/banner via the upstream picsum seed, audio from the local
-// LibriVox pool. Every tile gets real art and every story actually plays.
+// Media join: the backend carries no artwork, so covers and banners are resolved
+// from content_id via the upstream picsum seed. Audio is NOT resolved here — real
+// narration comes from GET /catalog/{id}/audio, fetched on the watch page. A story
+// with no narration shows as having none rather than borrowing a stock track.
 
 import type { ContentItem } from "@/data/content";
 import { bannerFor, coverFor, mediaFor } from "@/lib/media/media-pool";
@@ -50,7 +51,7 @@ export function contentToItem(c: ContentResponse): ContentItem {
     thumb: coverFor(c.content_id),
     wideThumb: bannerFor(c.content_id),
     url: `/watch/${c.content_id}`,
-    audio: mediaFor(c.content_id),
+    audio: mediaFor(),
     hasAudio: c.has_audio,
   };
 }
@@ -66,7 +67,7 @@ export function recommendationToItem(r: RecommendationItem): ContentItem {
     thumb: coverFor(r.content_id),
     wideThumb: bannerFor(r.content_id),
     url: `/watch/${r.content_id}`,
-    audio: mediaFor(r.content_id),
+    audio: mediaFor(),
   };
 }
 
@@ -80,6 +81,6 @@ export function hitToItem(h: DiscoveryHit): ContentItem {
     thumb: coverFor(h.content_id),
     wideThumb: bannerFor(h.content_id),
     url: `/watch/${h.content_id}`,
-    audio: mediaFor(h.content_id),
+    audio: mediaFor(),
   };
 }
