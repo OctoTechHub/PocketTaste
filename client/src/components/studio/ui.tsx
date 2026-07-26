@@ -32,7 +32,7 @@ export function friendlyError(_err?: unknown, fallback = "Couldn’t load this j
   return fallback;
 }
 
-const SPOTLIGHT = "rgba(139, 140, 255, 0.14)" as const;
+const SPOTLIGHT = "rgba(168, 85, 247, 0.16)" as const;
 
 // --- motion reveal ----------------------------------------------------------
 

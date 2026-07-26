@@ -2,7 +2,7 @@
 
 import { Loader } from "@/components/motion/loader";
 import { useBriefs, useDemand, useSaturation } from "@/hooks/api/use-creator";
-import { DemandChart, SaturationChart } from "./insights-charts";
+import { DemandChart, DemandTrendChart, SaturationChart } from "./insights-charts";
 import {
   arr,
   asRec,
@@ -82,6 +82,20 @@ export function InsightsPanel() {
           </div>
         ) : (
           <EmptyState title="No segments measured yet." />
+        )}
+      </section>
+
+      <section>
+        <SectionTitle
+          title="Completion vs drop-off"
+          subtitle="How well each top segment holds its audience."
+        />
+        {segments.length ? (
+          <Card>
+            <DemandTrendChart segments={segments} />
+          </Card>
+        ) : (
+          <EmptyState title="No retention data yet." />
         )}
       </section>
 
