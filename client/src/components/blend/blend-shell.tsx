@@ -2,50 +2,67 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { AlertCircle, ArrowRight, Loader2, Plus, Trash2 } from "lucide-react";
+import { AlertCircle, Clock, Loader2, Play, RotateCw, Users, X } from "lucide-react";
 
+import { SiteHeader } from "@/components/site-header";
+import { Card, Reveal, SectionTitle, TabHeader } from "@/components/studio/ui";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/api/use-auth";
 import {
-  useBlendFeed,
+  useBlendStream,
   useBlends,
   useCreateBlend,
   useRemoveBlend,
 } from "@/hooks/api/use-blend";
 import type { BlendFeedItem, BlendMemberSummary } from "@/lib/api/types";
-import { LeanMeter, MatchVenn, THEM, YOU, leanColor, ownerColor } from "./seam";
+import { BlendMark, LeanBar, SHARED_COLOR, THEM, YOU, initials, leanColor } from "./seam";
+import { UnderTheHood } from "./under-the-hood";
 
-const LABEL = "text-[10px] font-medium uppercase tracking-[0.18em] text-white/45";
-
-function errorMessage(error: unknown, fallback: string): string {
+function apiMessage(error: unknown, fallback: string): string {
   const detail = (error as { response?: { data?: { error?: { message?: string } } } })
     ?.response?.data?.error?.message;
   return detail ?? fallback;
 }
 
+function runtime(seconds: number): string {
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.round((seconds % 3600) / 60);
+  return hours ? `${hours}h ${minutes}m` : `${minutes}m`;
+}
+
+// ---------------------------------------------------------------------------
+// Invite — the only way a blend comes into existence. Nothing is pre-blended.
 // ---------------------------------------------------------------------------
 
-function AddPartner() {
+function InviteCard({ compact = false }: { compact?: boolean }) {
   const [email, setEmail] = useState("");
   const create = useCreateBlend();
+  const alreadyExisted = create.isSuccess && create.data?.created === false;
 
   return (
-    <form
-      onSubmit={(event) => {
-        event.preventDefault();
-        if (email.trim()) create.mutate(email.trim());
-      }}
-      className="rounded-2xl border border-white/10 bg-white/[0.03] p-5"
-    >
-      <label htmlFor="blend-email" className="block text-sm font-semibold text-white">
-        Blend with someone
-      </label>
-      <p className="mt-1 text-sm text-white/55">
-        Enter the email they listen with. You will both get one feed built from both
-        histories.
-      </p>
+    <Card spotlight={!compact}>
+      {compact ? (
+        <label htmlFor="blend-email" className="text-sm font-semibold text-foreground">
+          Blend with someone else
+        </label>
+      ) : (
+        <>
+          <h2 className="text-xl font-bold text-foreground">Put your taste together</h2>
+          <p className="mt-1 max-w-md text-sm leading-relaxed text-muted-foreground">
+            Enter the email your friend listens with. We rank the whole catalogue for each
+            of you, then build one feed neither of you would have found alone.
+          </p>
+        </>
+      )}
 
-      <div className="mt-4 flex flex-col gap-2 sm:flex-row">
+      <form
+        onSubmit={(event) => {
+          event.preventDefault();
+          const value = email.trim();
+          if (value) create.mutate(value, { onSuccess: () => setEmail("") });
+        }}
+        className="mt-4 flex flex-col gap-2 sm:flex-row"
+      >
         <input
           id="blend-email"
           type="email"
@@ -54,93 +71,151 @@ function AddPartner() {
           required
           value={email}
           onChange={(event) => setEmail(event.target.value)}
-          placeholder="amogh@gmail.com"
+          placeholder="friend@gmail.com"
+          aria-label="Your friend's email address"
           aria-describedby={create.isError ? "blend-email-error" : undefined}
-          className="min-h-11 flex-1 rounded-xl border border-white/15 bg-black/40 px-4 text-sm text-white placeholder:text-white/30 focus:border-white/40 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/60"
+          className="min-h-11 flex-1 rounded-full border border-white/10 bg-white/[0.04] px-5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         />
         <button
           type="submit"
           disabled={create.isPending || !email.trim()}
-          className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl px-5 text-sm font-semibold text-black transition-opacity hover:opacity-90 disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60"
-          style={{ background: `linear-gradient(90deg, ${YOU}, ${THEM})` }}
+          className="inline-flex min-h-11 items-center justify-center gap-2 rounded-full bg-primary px-7 text-sm font-bold text-primary-foreground transition-transform duration-150 hover:scale-[1.02] disabled:pointer-events-none disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring motion-reduce:hover:scale-100"
         >
           {create.isPending ? (
-            <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
-          ) : (
-            <Plus className="h-4 w-4" aria-hidden />
-          )}
-          Start blend
+            <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" aria-hidden />
+          ) : null}
+          {create.isPending ? "Blending" : "Blend"}
         </button>
-      </div>
+      </form>
 
-      {create.isError ? (
-        <p
-          id="blend-email-error"
-          role="alert"
-          className="mt-2 flex items-start gap-1.5 text-sm text-red-300"
-        >
-          <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
-          {errorMessage(create.error, "That did not work. Check the address and try again.")}
-        </p>
-      ) : null}
-      {create.isSuccess && create.data?.created === false ? (
-        <p role="status" className="mt-2 text-sm text-white/55">
-          You already blend with {create.data.members.find((m) => !m.is_you)?.display_name}.
-        </p>
-      ) : null}
-    </form>
+      {/* Reserved so a message never pushes the layout down. */}
+      <div className="mt-2 min-h-5" aria-live="polite">
+        {create.isError ? (
+          <p
+            id="blend-email-error"
+            role="alert"
+            className="flex items-center gap-1.5 text-[13px] text-destructive"
+          >
+            <AlertCircle className="h-3.5 w-3.5 shrink-0" aria-hidden />
+            {apiMessage(create.error, "That did not work. Check the address and try again.")}
+          </p>
+        ) : alreadyExisted ? (
+          <p className="text-[13px] text-muted-foreground">
+            You already blend with{" "}
+            {create.data?.members.find((member) => !member.is_you)?.display_name}.
+          </p>
+        ) : null}
+      </div>
+    </Card>
   );
 }
 
 // ---------------------------------------------------------------------------
 
-function FeedRow({
+function Hero({
+  members,
+  match,
+  itemCount,
+  poolSize,
+  settled,
+}: {
+  members: BlendMemberSummary[];
+  match: number;
+  itemCount: number;
+  poolSize: number;
+  settled: boolean;
+}) {
+  const [you, them] = members;
+  return (
+    <div
+      className="rounded-2xl border border-white/10 p-5 sm:p-6"
+      style={{
+        background: `linear-gradient(135deg, color-mix(in oklab, ${YOU} 26%, transparent), color-mix(in oklab, ${THEM} 26%, transparent))`,
+      }}
+    >
+      <div className="flex flex-col gap-5 sm:flex-row sm:items-center">
+        <BlendMark
+          match={match}
+          youLabel={you.display_name}
+          themLabel={them.display_name}
+          settled={settled}
+        />
+        <div className="min-w-0 flex-1">
+          <p className="text-xs font-black uppercase tracking-[0.2em] text-primary">Blend</p>
+          <h2 className="mt-1 truncate text-2xl font-bold text-foreground sm:text-4xl">
+            {you.display_name} <span className="text-muted-foreground">+</span>{" "}
+            {them.display_name}
+          </h2>
+          <p className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground">
+            <span className="font-semibold text-foreground">
+              {Math.round(match * 100)}% taste match
+            </span>
+            <span aria-hidden>·</span>
+            <span>{itemCount} stories</span>
+            <span aria-hidden>·</span>
+            <span>from {poolSize} candidates</span>
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function TrackRow({
   item,
   members,
-  rank,
+  index,
 }: {
   item: BlendFeedItem;
   members: BlendMemberSummary[];
-  rank: number;
+  index: number;
 }) {
   const [you, them] = members;
-  const accent = item.owner === "shared" ? ownerColor("shared", members) : leanColor(item.lean);
+  const accent = item.owner === "shared" ? SHARED_COLOR : leanColor(item.lean);
   const ownerName =
     item.owner === "shared"
       ? "Both"
       : members.find((member) => member.user_id === item.owner)?.display_name ?? "—";
 
   return (
-    <li
-      className="group relative flex gap-4 rounded-2xl border border-white/10 bg-white/[0.02] p-4 transition-colors hover:bg-white/[0.05]"
-      style={{ borderLeft: `2px solid ${accent}` }}
-    >
-      <span className={cn(LABEL, "w-6 pt-1 tabular-nums")}>{String(rank).padStart(2, "0")}</span>
+    <li className="group grid grid-cols-[24px_minmax(0,1fr)_auto] items-center gap-3 rounded-xl px-2 py-2.5 transition-colors hover:bg-white/[0.05] sm:grid-cols-[24px_minmax(0,2fr)_minmax(0,1fr)_auto] sm:gap-4 sm:px-3">
+      <span className="relative grid h-6 w-6 place-items-center">
+        <span className="text-sm tabular-nums text-muted-foreground group-hover:opacity-0">
+          {index + 1}
+        </span>
+        <Play
+          className="absolute h-3.5 w-3.5 fill-current text-foreground opacity-0 group-hover:opacity-100"
+          aria-hidden
+        />
+      </span>
 
-      <div className="min-w-0 flex-1">
-        <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+      <div className="min-w-0">
+        <div className="flex min-w-0 items-center gap-2">
+          <span
+            className="h-2.5 w-2.5 shrink-0 rounded-full"
+            style={{ background: accent }}
+            aria-hidden
+          />
           <Link
             href={`/watch/${item.content_id}`}
-            className="text-base font-semibold text-white hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60"
+            className="truncate text-sm font-semibold text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             {item.title}
           </Link>
-          <span
-            className="rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider"
-            style={{ background: `color-mix(in oklab, ${accent} 22%, transparent)`, color: accent }}
-          >
-            {ownerName}
-          </span>
-          <span className="text-[11px] text-white/35">
-            {item.genres.slice(0, 2).join(" · ")} · {item.language}
-          </span>
         </div>
+        <p className="mt-0.5 truncate pl-[18px] text-xs text-muted-foreground">
+          {ownerName} · {item.genres.slice(0, 2).join(", ")} · {item.language}
+        </p>
+      </div>
 
-        <p className="mt-1 line-clamp-2 text-sm text-white/55">{item.description}</p>
-        <p className="mt-2 text-[13px] text-white/70">{item.reason}</p>
+      {/* Dropped rather than wrapped below the title on small screens. */}
+      <p className="hidden min-w-0 truncate text-xs text-muted-foreground sm:block">
+        {item.reason}
+      </p>
 
-        <div className="mt-3 max-w-sm">
-          <LeanMeter
+      <div className="flex items-center gap-3 sm:gap-4">
+        <div className="hidden lg:block">
+          <LeanBar
             lean={item.lean}
             youScore={item.per_member[you.user_id] ?? 0}
             themScore={item.per_member[them.user_id] ?? 0}
@@ -148,252 +223,227 @@ function FeedRow({
             themLabel={them.display_name}
           />
         </div>
-      </div>
-
-      <div className="shrink-0 text-right">
-        <p className="text-lg font-bold tabular-nums text-white">{item.score.toFixed(2)}</p>
-        <p className={LABEL}>blend</p>
+        <span className="flex w-14 shrink-0 items-center justify-end gap-1 text-xs tabular-nums text-muted-foreground">
+          <Clock className="h-3 w-3" aria-hidden />
+          {runtime(item.duration_seconds)}
+        </span>
       </div>
     </li>
   );
 }
 
-// ---------------------------------------------------------------------------
-
-function BlendDetail({ blendId }: { blendId: string }) {
-  const { data, isPending, isError, error, refetch } = useBlendFeed(blendId, 18);
-
-  if (isPending) {
-    return (
-      <div className="space-y-3" aria-busy="true" aria-live="polite">
-        <div className="h-40 animate-pulse rounded-2xl bg-white/[0.04]" />
-        {[0, 1, 2, 3].map((index) => (
-          <div key={index} className="h-28 animate-pulse rounded-2xl bg-white/[0.03]" />
-        ))}
-      </div>
-    );
-  }
-
-  if (isError) {
-    return (
-      <div role="alert" className="rounded-2xl border border-red-500/25 bg-red-500/5 p-5">
-        <p className="text-sm text-red-200">
-          {errorMessage(error, "The blend could not be built.")}
-        </p>
-        <button
-          type="button"
-          onClick={() => refetch()}
-          className="mt-3 min-h-11 rounded-xl border border-white/20 px-4 text-sm font-medium text-white hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60"
-        >
-          Try again
-        </button>
-      </div>
-    );
-  }
-
-  const [you, them] = data.members;
-  const match = data.taste_match;
-  const mix = data.mix;
-  const total = data.items.length || 1;
-  const share = (count: number) => Math.round((count / total) * 100);
-
+function MixBar({
+  members,
+  mix,
+  total,
+}: {
+  members: BlendMemberSummary[];
+  mix: Record<string, number>;
+  total: number;
+}) {
+  const [you, them] = members;
+  const safe = total || 1;
+  const parts = [
+    { label: you.display_name, count: mix[you.user_id] ?? 0, color: YOU },
+    { label: "Both", count: mix.shared ?? 0, color: SHARED_COLOR },
+    { label: them.display_name, count: mix[them.user_id] ?? 0, color: THEM },
+  ];
   return (
-    <div className="space-y-6">
-      <section className="rounded-2xl border border-white/10 bg-white/[0.03] p-5 sm:p-6">
-        <div className="flex flex-col items-center gap-6 sm:flex-row sm:items-center">
-          <MatchVenn
-            match={match.overall}
-            youLabel={you.display_name}
-            themLabel={them.display_name}
-          />
-
-          <div className="min-w-0 flex-1">
-            <h2 className="text-xl font-bold text-white">
-              {you.display_name} <span className="text-white/35">and</span> {them.display_name}
-            </h2>
-            <p className="mt-1 text-sm text-white/55">{match.basis}.</p>
-
-            <dl className="mt-4 grid grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-4">
-              {[
-                ["Taste vector", match.taste_vector],
-                ["Genre", match.genre_overlap],
-                ["Language", match.language_overlap],
-                ["Shared library", match.shared_library],
-              ].map(([label, value]) => (
-                <div key={label as string}>
-                  <dt className={LABEL}>{label}</dt>
-                  <dd className="mt-0.5 text-lg font-bold tabular-nums text-white">
-                    {Math.round((value as number) * 100)}%
-                  </dd>
-                </div>
-              ))}
-            </dl>
-
-            <p className="mt-3 text-sm text-white/45">
-              {match.shared_titles === 0
-                ? "No finished title in common yet."
-                : `${match.shared_titles} title${match.shared_titles === 1 ? "" : "s"} you have both finished.`}
-            </p>
-          </div>
-        </div>
-
-        {/* Composition of the feed, as a single honest bar. */}
-        <div className="mt-6">
-          <div className="flex items-baseline justify-between">
-            <span className={LABEL}>This feed</span>
-            <span className="text-[11px] text-white/45">
-              {data.items.length} of {data.candidate_pool_size} candidates
-            </span>
-          </div>
-          <div className="mt-2 flex h-2 overflow-hidden rounded-full bg-white/5">
-            <div style={{ width: `${share(mix[you.user_id] ?? 0)}%`, background: YOU }} />
-            <div
-              style={{
-                width: `${share(mix.shared ?? 0)}%`,
-                background: `color-mix(in oklab, ${YOU} 50%, ${THEM})`,
-              }}
-            />
-            <div style={{ width: `${share(mix[them.user_id] ?? 0)}%`, background: THEM }} />
-          </div>
-          <div className="mt-2 flex flex-wrap gap-x-5 gap-y-1 text-[11px] text-white/60">
-            <Legend color={YOU} label={`${you.display_name} ${mix[you.user_id] ?? 0}`} />
-            <Legend
-              color={`color-mix(in oklab, ${YOU} 50%, ${THEM})`}
-              label={`Shared ${mix.shared ?? 0}`}
-            />
-            <Legend color={THEM} label={`${them.display_name} ${mix[them.user_id] ?? 0}`} />
-          </div>
-        </div>
-      </section>
-
-      <ol className="space-y-3">
-        {data.items.map((item, index) => (
-          <FeedRow key={item.content_id} item={item} members={data.members} rank={index + 1} />
-        ))}
-      </ol>
-
-      <p className="text-[11px] leading-relaxed text-white/35">
-        Scored with the same ranker as your own recommendations, once per person, then
-        combined as {data.method.aggregation}. {data.method.why_not_average}
+    <Card spotlight={false}>
+      <p className="text-xs font-black uppercase tracking-[0.2em] text-muted-foreground">
+        Who this feed came from
       </p>
-    </div>
+      <div className="mt-3 flex h-2 gap-0.5 overflow-hidden rounded-full bg-white/5">
+        {parts.map((part) => (
+          <span
+            key={part.label}
+            style={{ width: `${(part.count / safe) * 100}%`, background: part.color }}
+          />
+        ))}
+      </div>
+      <ul className="mt-3 flex flex-wrap gap-x-5 gap-y-1.5 text-[13px] text-muted-foreground">
+        {parts.map((part) => (
+          <li key={part.label} className="flex items-center gap-1.5">
+            <span className="h-2 w-2 rounded-full" style={{ background: part.color }} aria-hidden />
+            <span className="text-foreground">{part.label}</span>
+            <span className="tabular-nums">{part.count}</span>
+          </li>
+        ))}
+      </ul>
+    </Card>
   );
 }
 
-function Legend({ color, label }: { color: string; label: string }) {
+function BlendView({ blendId }: { blendId: string }) {
+  const { stages, feed, error, isStreaming, restart } = useBlendStream(blendId, 18);
+  const remove = useRemoveBlend();
+
+  if (error) {
+    return (
+      <Card spotlight={false}>
+        <p role="alert" className="text-sm text-destructive">
+          {error}
+        </p>
+        <button
+          type="button"
+          onClick={() => restart()}
+          className="mt-4 inline-flex min-h-11 items-center gap-2 rounded-full bg-primary px-5 text-sm font-bold text-primary-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          <RotateCw className="h-3.5 w-3.5" aria-hidden />
+          Try again
+        </button>
+      </Card>
+    );
+  }
+
   return (
-    <span className="inline-flex items-center gap-1.5">
-      <span className="h-2 w-2 rounded-full" style={{ background: color }} aria-hidden />
-      {label}
-    </span>
+    <div className="space-y-4">
+      {feed ? (
+        <Hero
+          members={feed.members}
+          match={feed.taste_match.overall}
+          itemCount={feed.items.length}
+          poolSize={feed.candidate_pool_size}
+          settled
+        />
+      ) : (
+        // Same height as the settled hero, so the log below never jumps.
+        <div className="h-[172px] animate-pulse rounded-2xl border border-white/10 bg-white/[0.03] motion-reduce:animate-none sm:h-[164px]" />
+      )}
+
+      <UnderTheHood stages={stages} isStreaming={isStreaming} />
+
+      {feed ? (
+        <>
+          <MixBar members={feed.members} mix={feed.mix} total={feed.items.length} />
+
+          <Card spotlight={false} className="p-2 sm:p-3">
+            <ol>
+              {feed.items.map((item, index) => (
+                <TrackRow key={item.content_id} item={item} members={feed.members} index={index} />
+              ))}
+            </ol>
+          </Card>
+
+          <p className="px-1 text-xs leading-relaxed text-muted-foreground">
+            Ranked with the same engine as your own recommendations, once per person, then
+            combined as {feed.method.aggregation}. {feed.method.why_not_average}
+          </p>
+
+          <button
+            type="button"
+            onClick={() => remove.mutate(blendId)}
+            disabled={remove.isPending}
+            className="inline-flex min-h-11 items-center gap-1.5 rounded-full px-4 text-[13px] font-semibold text-muted-foreground transition-colors hover:text-foreground disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <X className="h-3.5 w-3.5" aria-hidden />
+            End this blend
+          </button>
+        </>
+      ) : (
+        <div className="space-y-2" aria-hidden>
+          {[0, 1, 2, 3, 4, 5].map((row) => (
+            <div
+              key={row}
+              className="h-[52px] animate-pulse rounded-xl border border-white/10 bg-white/[0.03] motion-reduce:animate-none"
+            />
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 
 // ---------------------------------------------------------------------------
 
 export function BlendShell() {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, account } = useAuth();
   const { data, isPending } = useBlends();
-  const remove = useRemoveBlend();
   const [activeId, setActiveId] = useState<string | null>(null);
 
   const blends = useMemo(() => data?.blends ?? [], [data]);
 
   useEffect(() => {
-    if (!activeId && blends.length) setActiveId(blends[0].blend_id);
-    if (activeId && !blends.some((blend) => blend.blend_id === activeId)) {
-      setActiveId(blends[0]?.blend_id ?? null);
+    if (blends.length === 0) {
+      if (activeId !== null) setActiveId(null);
+      return;
+    }
+    if (!activeId || !blends.some((blend) => blend.blend_id === activeId)) {
+      setActiveId(blends[0].blend_id);
     }
   }, [blends, activeId]);
 
-  if (!isAuthenticated) {
-    return (
-      <main className="mx-auto max-w-3xl px-4 pb-24 pt-28 sm:px-8">
-        <h1 className="text-3xl font-black tracking-tight text-white">Blend</h1>
-        <p className="mt-2 text-white/55">Sign in to build a feed with someone else.</p>
-      </main>
-    );
-  }
-
   return (
-    <main className="mx-auto max-w-4xl px-4 pb-24 pt-28 sm:px-8">
-      <header>
-        <p className={LABEL}>Two listeners, one feed</p>
-        <h1 className="mt-1 text-3xl font-black tracking-tight text-white sm:text-4xl">
-          Blend
-        </h1>
-        <p className="mt-2 max-w-xl text-white/55">
-          Add someone by email. Every story below is scored for both of you and labelled
-          with whose taste it came from.
-        </p>
-      </header>
+    <div className="min-h-screen bg-background text-foreground">
+      <SiteHeader />
+      <main className="mx-auto max-w-6xl px-4 pb-20 pt-24 sm:px-8">
+        <header className="mb-6">
+          <p className="text-xs font-black uppercase tracking-[0.2em] text-primary">Blend</p>
+          <h1 className="mt-1 text-2xl font-bold sm:text-3xl">
+            {account?.display_name ? `${account.display_name} and a friend` : "Two listeners, one feed"}
+          </h1>
+        </header>
 
-      <div className="mt-8">
-        <AddPartner />
-      </div>
+        {!isAuthenticated ? (
+          <Card className="text-center" spotlight={false}>
+            <p className="font-semibold text-foreground">Sign in to blend with a friend</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Use “Sign in” in the top-right. A blend reads both listening histories, so it
+              needs your account.
+            </p>
+          </Card>
+        ) : isPending ? (
+          <div className="h-[220px] animate-pulse rounded-2xl border border-white/10 bg-white/[0.03] motion-reduce:animate-none" />
+        ) : blends.length === 0 ? (
+          <Reveal>
+            <TabHeader
+              icon={Users}
+              title="Start a blend"
+              subtitle="Nothing here until you add someone — blends are never made for you."
+            />
+            <InviteCard />
+          </Reveal>
+        ) : (
+          <div className="space-y-6">
+            {blends.length > 1 ? (
+              <nav className="flex flex-wrap gap-2" aria-label="Your blends">
+                {blends.map((blend) => {
+                  const partner = blend.members.find((member) => !member.is_you);
+                  const active = blend.blend_id === activeId;
+                  return (
+                    <button
+                      key={blend.blend_id}
+                      type="button"
+                      aria-current={active ? "true" : undefined}
+                      onClick={() => setActiveId(blend.blend_id)}
+                      className={cn(
+                        "inline-flex min-h-11 items-center gap-2 rounded-full px-4 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                        active
+                          ? "bg-primary text-primary-foreground"
+                          : "border border-white/10 text-muted-foreground hover:text-foreground",
+                      )}
+                    >
+                      <span
+                        className="grid h-5 w-5 place-items-center rounded-full text-[10px] font-black text-white"
+                        style={{ background: THEM }}
+                        aria-hidden
+                      >
+                        {initials(partner?.display_name ?? "?")}
+                      </span>
+                      {partner?.display_name ?? "Blend"}
+                    </button>
+                  );
+                })}
+              </nav>
+            ) : null}
 
-      {isPending ? (
-        <div className="mt-6 h-12 animate-pulse rounded-xl bg-white/[0.04]" aria-busy="true" />
-      ) : blends.length === 0 ? (
-        <section className="mt-6 rounded-2xl border border-dashed border-white/15 p-8 text-center">
-          <p className="text-white">No blends yet.</p>
-          <p className="mt-1 text-sm text-white/50">
-            Add a listener above and their history joins yours.
-          </p>
-        </section>
-      ) : (
-        <>
-          {blends.length > 1 ? (
-            <div className="mt-6 flex flex-wrap gap-2" role="tablist" aria-label="Your blends">
-              {blends.map((blend) => {
-                const partner = blend.members.find((member) => !member.is_you);
-                const active = blend.blend_id === activeId;
-                return (
-                  <button
-                    key={blend.blend_id}
-                    role="tab"
-                    aria-selected={active}
-                    onClick={() => setActiveId(blend.blend_id)}
-                    className={cn(
-                      "inline-flex min-h-11 items-center gap-2 rounded-xl border px-4 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60",
-                      active
-                        ? "border-white/40 bg-white/10 font-semibold text-white"
-                        : "border-white/10 text-white/60 hover:bg-white/5",
-                    )}
-                  >
-                    {partner?.display_name ?? "Blend"}
-                    <span className="tabular-nums text-white/40">
-                      {Math.round(blend.taste_match.overall * 100)}%
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-          ) : null}
+            {activeId ? <BlendView key={activeId} blendId={activeId} /> : null}
 
-          <div className="mt-6">{activeId ? <BlendDetail blendId={activeId} /> : null}</div>
-
-          {activeId ? (
-            <button
-              type="button"
-              onClick={() => remove.mutate(activeId)}
-              disabled={remove.isPending}
-              className="mt-8 inline-flex min-h-11 items-center gap-2 rounded-xl border border-white/10 px-4 text-sm text-white/50 transition-colors hover:border-red-500/40 hover:text-red-300 disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60"
-            >
-              <Trash2 className="h-4 w-4" aria-hidden />
-              End this blend
-            </button>
-          ) : null}
-        </>
-      )}
-
-      <Link
-        href="/"
-        className="mt-10 inline-flex items-center gap-1.5 text-sm text-white/45 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60"
-      >
-        Back to browsing
-        <ArrowRight className="h-3.5 w-3.5" aria-hidden />
-      </Link>
-    </main>
+            <SectionTitle title="Add another" />
+            <InviteCard compact />
+          </div>
+        )}
+      </main>
+    </div>
   );
 }

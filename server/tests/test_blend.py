@@ -212,3 +212,52 @@ def test_shared_genres_register_even_when_it_is_not_anyone_s_top_genre():
 def test_listeners_with_no_history_do_not_report_a_fake_match():
     blank = UserProfile(user_id="u1")
     assert taste_match(blank, UserProfile(user_id="u2"))["overall"] == 0.0
+
+
+# ---------------------------------------------------------------------------
+# Streaming — the loop split the SSE endpoint depends on
+# ---------------------------------------------------------------------------
+
+
+def test_stage_callback_reports_each_real_step(service, context):
+    """Stages are emitted as work completes, carrying the counts actually used —
+    not a progress animation."""
+    seen: list[tuple[str, str, dict]] = []
+    members = [member("u1", "Krish", genre_affinity={"horror": 1.0}), member("u2", "Amogh")]
+    service.blend(members, context, limit=6, on_stage=lambda *args: seen.append(args))
+
+    steps = [step for step, _, _ in seen]
+    assert steps[0] == "members" and steps[-1] == "done"
+    assert steps.count("score") == 2               # once per listener
+    assert {"candidates", "normalise", "combine", "select"} <= set(steps)
+
+    detail = dict(next(d for step, _, d in seen if step == "candidates"))
+    assert detail["candidates"] == len(context.catalog)
+    assert all("elapsed_ms" in d for _, _, d in seen)
+
+
+def test_the_database_half_and_the_scoring_half_stay_separate():
+    """The streaming endpoint scores on a worker thread. Mongo cannot go with it: the
+    async client binds to the loop it was created on and raises `Cannot use
+    AsyncMongoClient in different event loop` if a second loop touches it. So the
+    awaiting methods must stay awaiting and `compose` must stay pure — collapsing
+    them back together is what broke the stream once already."""
+    import inspect
+
+    from app.services.blend_service import BlendApplicationService
+
+    assert inspect.iscoroutinefunction(BlendApplicationService.prepare)
+    assert inspect.iscoroutinefunction(BlendApplicationService.mark_viewed)
+    assert not inspect.iscoroutinefunction(BlendApplicationService.compose)
+
+
+def test_the_stream_route_never_opens_a_second_event_loop():
+    """`asyncio.run` inside the worker thread is the exact bug. Nothing in the blend
+    route may create a loop."""
+    from pathlib import Path
+
+    import app.api.routes.blend as blend_route
+
+    source = Path(blend_route.__file__).read_text(encoding="utf-8")
+    assert "asyncio.run(" not in source
+    assert "new_event_loop" not in source

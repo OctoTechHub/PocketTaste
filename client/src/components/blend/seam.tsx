@@ -1,117 +1,104 @@
 "use client";
 
 /**
- * The shared visual language of Blend.
+ * Blend's data colours.
  *
- * Two listeners, two colours. Every mixed value on this surface is produced with
- * `color-mix(in oklab, ...)` at a percentage taken straight from the algorithm's
- * `lean` output — so the colour of a row is not a decorative choice, it is the
- * attribution rendered. A row that is 70% one person's taste is 70% their hue.
+ * The page chrome is the app's own — `Card`, `text-primary`, `muted-foreground`, the
+ * same radii and borders as Studio and Admin. What Blend adds is a two-identity
+ * colour system, and it exists only where it carries meaning: every mixed value is
+ * produced with `color-mix(in oklab, ...)` at a percentage taken from the algorithm's
+ * `lean` output, so a row that is 70% one person's taste is 70% their hue. These two
+ * hues are never used for chrome, and the app's primary is never used for data.
  */
 
 export const YOU = "oklch(0.72 0.19 32)"; // ember
 export const THEM = "oklch(0.70 0.15 258)"; // indigo
+export const SHARED_COLOR = `color-mix(in oklab, ${YOU} 50%, ${THEM})`;
 
 /** `lean` is -1 (entirely you) .. +1 (entirely them). Returns 0..100 toward them. */
 export function leanToPercent(lean: number): number {
   return Math.round(((Math.max(-1, Math.min(1, lean)) + 1) / 2) * 100);
 }
 
-/** The colour an item earns from its own lean value. */
 export function leanColor(lean: number): string {
   return `color-mix(in oklab, ${YOU} ${100 - leanToPercent(lean)}%, ${THEM})`;
 }
 
-export function ownerColor(owner: string, members: { user_id: string }[]): string {
-  if (owner === "shared") return `color-mix(in oklab, ${YOU} 50%, ${THEM})`;
-  return owner === members[0]?.user_id ? YOU : THEM;
+export function initials(name: string): string {
+  return name.trim().slice(0, 1).toUpperCase() || "?";
 }
 
 /**
- * The match, drawn as the thing it actually is: two sets and their intersection.
+ * Two listeners as overlapping discs — the one borrowed gesture, because it is the
+ * clearest way anyone has drawn "two tastes and their shared part".
  *
- * A percentage in large type would say the same number, but a Venn says what the
- * number *means* — that these are two separate tastes with a measurable shared
- * region. The discs move apart as the match falls, so a weak blend looks weak.
+ * Separation is driven by the match rather than fixed, so a weak blend reads as weak
+ * before the number is parsed. `settled` drives the entrance: the discs start apart
+ * and close to their real position once the result lands, which is the whole
+ * blending moment. Intrinsic size is fixed so the header never reflows.
  */
-export function MatchVenn({
+export function BlendMark({
   match,
   youLabel,
   themLabel,
-  size = 168,
+  size = 116,
+  settled = true,
 }: {
   match: number;
   youLabel: string;
   themLabel: string;
   size?: number;
+  settled?: boolean;
 }) {
-  const radius = size * 0.28;
-  // At match=1 the discs sit on top of each other; at 0 they barely touch.
-  const separation = radius * (2 - 1.05 * Math.min(1, Math.max(0, match)));
+  const radius = size * 0.29;
+  const target = radius * (2 - 1.05 * Math.min(1, Math.max(0, match)));
+  const separation = settled ? target : radius * 2.1;
   const centre = size / 2;
-  const percent = Math.round(match * 100);
 
   return (
-    <div className="relative shrink-0" style={{ width: size, height: size }}>
-      <svg
-        width={size}
-        height={size}
-        viewBox={`0 0 ${size} ${size}`}
-        role="img"
-        aria-label={`Taste match ${percent} percent between ${youLabel} and ${themLabel}`}
+    <svg
+      width={size}
+      height={size}
+      viewBox={`0 0 ${size} ${size}`}
+      className="shrink-0"
+      role="img"
+      aria-label={`${Math.round(match * 100)} percent taste match between ${youLabel} and ${themLabel}`}
+    >
+      <defs>
+        <clipPath id="blendmark-clip">
+          <circle cx={centre - separation / 2} cy={centre} r={radius} />
+        </clipPath>
+      </defs>
+      <g
+        style={{
+          transition: "opacity 400ms ease-out",
+          opacity: settled ? 1 : 0.55,
+        }}
       >
-        <defs>
-          <clipPath id="blend-left">
-            <circle cx={centre - separation / 2} cy={centre} r={radius} />
-          </clipPath>
-        </defs>
-        <circle
-          cx={centre - separation / 2}
-          cy={centre}
-          r={radius}
-          fill={YOU}
-          fillOpacity={0.22}
-          stroke={YOU}
-          strokeOpacity={0.55}
-        />
-        <circle
-          cx={centre + separation / 2}
-          cy={centre}
-          r={radius}
-          fill={THEM}
-          fillOpacity={0.22}
-          stroke={THEM}
-          strokeOpacity={0.55}
-        />
-        {/* The intersection, drawn by clipping one disc to the other. */}
-        <g clipPath="url(#blend-left)">
-          <circle
-            cx={centre + separation / 2}
-            cy={centre}
-            r={radius}
-            fill={`color-mix(in oklab, ${YOU} 50%, ${THEM})`}
-            fillOpacity={0.75}
-          />
+        <circle cx={centre - separation / 2} cy={centre} r={radius} fill={YOU} fillOpacity={0.85} />
+        <circle cx={centre + separation / 2} cy={centre} r={radius} fill={THEM} fillOpacity={0.85} />
+        <g clipPath="url(#blendmark-clip)">
+          <circle cx={centre + separation / 2} cy={centre} r={radius} fill={SHARED_COLOR} />
         </g>
-      </svg>
-      <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
-        <span className="text-3xl font-black tabular-nums tracking-tighter text-white">
-          {percent}
-          <span className="text-lg font-bold">%</span>
-        </span>
-        <span className="text-[10px] font-medium uppercase tracking-[0.18em] text-white/55">
-          match
-        </span>
-      </div>
-    </div>
+      </g>
+      {settled ? (
+        <text
+          x={centre}
+          y={centre}
+          textAnchor="middle"
+          dominantBaseline="central"
+          className="fill-white font-black"
+          style={{ fontSize: size * 0.21, letterSpacing: "-0.03em" }}
+        >
+          {Math.round(match * 100)}%
+        </text>
+      ) : null}
+    </svg>
   );
 }
 
-/**
- * Where one story sits between two people. The marker position is the raw `lean`
- * value; nothing here is smoothed or rounded for looks.
- */
-export function LeanMeter({
+/** Where one story sits between two people. Position is the raw `lean`, unrounded. */
+export function LeanBar({
   lean,
   youScore,
   themScore,
@@ -124,27 +111,22 @@ export function LeanMeter({
   youLabel: string;
   themLabel: string;
 }) {
-  const percent = leanToPercent(lean);
   return (
     <div
       className="flex items-center gap-2"
       role="img"
-      aria-label={`${youLabel} scores this ${Math.round(youScore * 100)} percent, ${themLabel} ${Math.round(themScore * 100)} percent`}
+      aria-label={`${youLabel} ${Math.round(youScore * 100)} percent, ${themLabel} ${Math.round(themScore * 100)} percent`}
     >
-      <span className="w-8 text-right text-[10px] font-semibold tabular-nums text-white/50">
+      <span className="w-7 text-right text-[11px] font-semibold tabular-nums text-muted-foreground">
         {Math.round(youScore * 100)}
       </span>
-      <div className="relative h-1 flex-1 overflow-hidden rounded-full">
-        <div
-          className="absolute inset-0"
-          style={{ background: `linear-gradient(90deg, ${YOU}, ${THEM})`, opacity: 0.3 }}
+      <span className="relative h-[3px] w-full min-w-[72px] max-w-[128px] rounded-full bg-white/10">
+        <span
+          className="absolute top-1/2 h-2 w-2 -translate-x-1/2 -translate-y-1/2 rounded-full"
+          style={{ left: `${leanToPercent(lean)}%`, background: leanColor(lean) }}
         />
-        <div
-          className="absolute top-1/2 h-2.5 w-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full ring-2 ring-black/50 transition-[left] duration-500"
-          style={{ left: `${percent}%`, background: leanColor(lean) }}
-        />
-      </div>
-      <span className="w-8 text-[10px] font-semibold tabular-nums text-white/50">
+      </span>
+      <span className="w-7 text-[11px] font-semibold tabular-nums text-muted-foreground">
         {Math.round(themScore * 100)}
       </span>
     </div>
