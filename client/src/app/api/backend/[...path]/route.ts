@@ -11,10 +11,16 @@
 
 import type { NextRequest } from "next/server";
 
+import { HAS_CREDENTIALS, WorkspaceTokenError, workspaceToken } from "./workspace-token";
+
 export const dynamic = "force-dynamic";
 
 const UPSTREAM = (process.env.API_UPSTREAM_URL ?? "http://127.0.0.1:8000").replace(/\/$/, "");
-const WORKSPACE_TOKEN = process.env.DATABRICKS_TOKEN?.trim();
+
+/** Told to the operator whenever the workspace leg is what failed. */
+const CREDENTIALS_HINT =
+  "Set DATABRICKS_HOST, DATABRICKS_CLIENT_ID and DATABRICKS_CLIENT_SECRET for a " +
+  "service principal with CAN_USE on the app.";
 
 /** Databricks Apps hostnames sit behind the OAuth proxy; nothing else does. */
 const BEHIND_OAUTH_PROXY = (() => {
@@ -53,7 +59,7 @@ function envelope(message: string, status: number, details?: unknown): Response 
   return Response.json({ error: { message, details } }, { status });
 }
 
-function upstreamHeaders(req: NextRequest): Headers {
+async function upstreamHeaders(req: NextRequest): Promise<Headers> {
   const headers = new Headers();
   req.headers.forEach((value, key) => {
     if (!DROP_REQUEST_HEADERS.has(key.toLowerCase())) headers.set(key, value);
@@ -67,7 +73,9 @@ function upstreamHeaders(req: NextRequest): Headers {
   const appToken = req.headers.get("authorization");
   headers.delete("authorization");
   if (appToken) headers.set("x-app-authorization", appToken);
-  if (WORKSPACE_TOKEN) headers.set("authorization", `Bearer ${WORKSPACE_TOKEN}`);
+
+  const token = await workspaceToken();
+  if (token) headers.set("authorization", `Bearer ${token}`);
 
   return headers;
 }
@@ -81,9 +89,9 @@ function proxyFailure(response: Response): Response | null {
   const location = response.headers.get("location") ?? "";
   if (response.status >= 300 && response.status < 400 && /\/oidc\//.test(location)) {
     return envelope(
-      WORKSPACE_TOKEN
-        ? "Databricks rejected the workspace token — it is expired, or lacks CAN_USE on this app."
-        : "Databricks Apps requires a workspace token. Set DATABRICKS_TOKEN in client/.env.",
+      HAS_CREDENTIALS
+        ? `Databricks bounced the request to its login page. ${CREDENTIALS_HINT}`
+        : `Databricks Apps requires a workspace token. ${CREDENTIALS_HINT}`,
       502,
       { upstream: UPSTREAM, redirected_to: "workspace OAuth login" },
     );
@@ -95,6 +103,18 @@ function proxyFailure(response: Response): Response | null {
       "The Databricks App is deployed but not running. Start it from the workspace Apps page.",
       503,
       { upstream: UPSTREAM },
+    );
+  }
+
+  // A 401/403 that isn't our own error envelope came from the Apps proxy, not
+  // from the API. Passing it through unlabelled reads as a failed user login,
+  // which sends you looking in exactly the wrong place.
+  if ((response.status === 401 || response.status === 403) && !contentType.includes("json")) {
+    return envelope(
+      `Databricks rejected the workspace credentials — a 'dapi…' personal access ` +
+        `token will not work here, the Apps proxy requires OAuth. ${CREDENTIALS_HINT}`,
+      502,
+      { upstream: UPSTREAM, upstream_status: response.status },
     );
   }
 
@@ -110,11 +130,21 @@ async function forward(req: NextRequest, path: string[]): Promise<Response> {
   const body =
     method === "GET" || method === "HEAD" ? undefined : await req.arrayBuffer();
 
+  let headers: Headers;
+  try {
+    headers = await upstreamHeaders(req);
+  } catch (cause) {
+    if (cause instanceof WorkspaceTokenError) {
+      return envelope(`${cause.message} ${CREDENTIALS_HINT}`, 502, { upstream: UPSTREAM });
+    }
+    throw cause;
+  }
+
   let response: Response;
   try {
     response = await fetch(target, {
       method,
-      headers: upstreamHeaders(req),
+      headers,
       body,
       redirect: "manual",
       cache: "no-store",
@@ -130,12 +160,12 @@ async function forward(req: NextRequest, path: string[]): Promise<Response> {
   const failure = proxyFailure(response);
   if (failure) return failure;
 
-  const headers = new Headers();
+  const responseHeaders = new Headers();
   response.headers.forEach((value, key) => {
-    if (!DROP_RESPONSE_HEADERS.has(key.toLowerCase())) headers.set(key, value);
+    if (!DROP_RESPONSE_HEADERS.has(key.toLowerCase())) responseHeaders.set(key, value);
   });
 
-  return new Response(response.body, { status: response.status, headers });
+  return new Response(response.body, { status: response.status, headers: responseHeaders });
 }
 
 type Context = RouteContext<"/api/backend/[...path]">;
