@@ -67,16 +67,22 @@ class CatalogService:
                         "duplicate_kind": report.duplicate_kind.value,
                         "top_score": report.top_score,
                         "originality_score": report.originality_score,
+                        # The per-signal breakdown ships with the refusal. A creator whose
+                        # upload is rejected needs to see *which* signal fired to argue
+                        # with it -- otherwise the block is unappealable.
                         "matches": [
                             {
                                 "content_id": match.content_id,
                                 "title": match.title,
                                 "creator_id": match.creator_id,
                                 "combined_score": match.combined_score,
+                                "signals": match.signals.model_dump(mode="json"),
                                 "rationale": match.rationale,
                             }
                             for match in report.matches[:3]
                         ],
+                        "applied_signals": report.applied_signals,
+                        "weights": report.weights,
                         "explanation": report.explanation,
                         "disclaimer": report.disclaimer,
                     },

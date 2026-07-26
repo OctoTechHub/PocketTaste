@@ -84,6 +84,37 @@ def jaccard(left: set[str], right: set[str]) -> float:
     return round(len(left & right) / union, 6) if union else 0.0
 
 
+#: Below this many shingles on the smaller side, containment is not trustworthy: two
+#: unrelated stories can share three stock phrases and score 1.0.
+_MIN_CONTAINMENT_SHINGLES = 8
+
+
+def containment(left: set[str], right: set[str]) -> float:
+    """Overlap against the *smaller* side, not the union.
+
+    Jaccard divides by the union, so a short text copied word for word into a long one
+    scores low purely because the long side contributes so many non-shared shingles.
+    That is the wrong answer for plagiarism: a 25-word logline lifted verbatim is a
+    total copy of itself. Containment asks "how much of the smaller text appears in the
+    larger one", which is the question a re-upload check is actually posing.
+    """
+    if not left or not right:
+        return 0.0
+    smaller = min(len(left), len(right))
+    if smaller < _MIN_CONTAINMENT_SHINGLES:
+        return 0.0
+    return round(len(left & right) / smaller, 6)
+
+
+def verbatim_overlap(left: set[str], right: set[str]) -> float:
+    """The lexical-copy signal: whichever of Jaccard or containment is more damning.
+
+    Jaccard still governs same-length comparisons; containment rescues the
+    short-draft-against-long-catalog-item case that Jaccard structurally cannot see.
+    """
+    return max(jaccard(left, right), containment(left, right))
+
+
 def shingles(text: str, size: int = 5) -> set[str]:
     """Word-level n-gram shingles — the standard near-duplicate detector for prose."""
     words = content_tokens(text)
