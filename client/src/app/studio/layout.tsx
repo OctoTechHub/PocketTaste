@@ -46,6 +46,7 @@ export default function StudioLayout({ children }: { children: ReactNode }) {
                   <Link
                     key={slug}
                     href={href}
+                    aria-current={active ? "page" : undefined}
                     className={`relative inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium transition-colors ${
                       active
                         ? "text-primary-foreground"
@@ -55,14 +56,14 @@ export default function StudioLayout({ children }: { children: ReactNode }) {
                     {active ? (
                       <motion.span
                         layoutId="studio-tab-pill"
-                        className="absolute inset-0 -z-10 rounded-full bg-primary"
+                        className="absolute inset-0 z-0 rounded-full bg-primary"
                         transition={{ type: "spring", stiffness: 480, damping: 38 }}
                       />
                     ) : (
-                      <span className="absolute inset-0 -z-10 rounded-full border border-border" />
+                      <span className="absolute inset-0 z-0 rounded-full border border-border" />
                     )}
-                    <Icon className="h-4 w-4" />
-                    {label}
+                    <Icon className="relative z-10 h-4 w-4" />
+                    <span className="relative z-10">{label}</span>
                   </Link>
                 );
               })}
