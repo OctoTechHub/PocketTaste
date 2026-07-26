@@ -142,7 +142,7 @@ def build_container(settings: Settings, gateway: MongoGateway) -> Container:
         settings, llm, similarity, goat, sarvam_finishing, fast_story
     )
     catalog_service = CatalogService(
-        settings, content_repo, profile_repo, similarity_audit_repo, similarity, discovery
+        settings, content_repo, profile_repo, similarity_audit_repo, similarity, discovery, audio_repo
     )
     activity_service = ActivityService(content_repo, activity_repo)
     blend_algorithm = BlendService(settings, ranking)

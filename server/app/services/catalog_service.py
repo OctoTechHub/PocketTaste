@@ -15,6 +15,7 @@ from app.core.errors import ConflictError, NotFoundError
 from app.core.logging import get_logger
 from app.data.repositories import (
     ActivityRepository,
+    ContentAudioRepository,
     ContentProfileRepository,
     ContentRepository,
     SimilarityAuditRepository,
@@ -37,6 +38,7 @@ class CatalogService:
         audit_repo: SimilarityAuditRepository,
         similarity: SimilarityService,
         discovery: DiscoveryService,
+        audio_repo: ContentAudioRepository,
     ) -> None:
         self._settings = settings
         self._content_repo = content_repo
@@ -44,6 +46,7 @@ class CatalogService:
         self._audit_repo = audit_repo
         self._similarity = similarity
         self._discovery = discovery
+        self._audio_repo = audio_repo
 
     async def ingest(
         self, payload: ContentCreate, *, screen: bool = True, use_llm: bool = True
@@ -103,12 +106,26 @@ class CatalogService:
             is_synthetic=False,
             published_at=payload.published_at or utcnow(),
             created_at=utcnow(),
-            audio_base64=payload.audio_base64,
+            # The narrated blob is kept off the catalogue document (see
+            # ContentAudioRepository) — the item only carries the metadata + flag.
+            audio_base64="",
             audio_language=payload.audio_language,
             audio_source=payload.audio_source,
             has_audio=bool(payload.audio_base64),
         )
         await self._content_repo.upsert(item)
+
+        # Persist the narration to its own collection so /catalog/{id}/audio(.wav)
+        # can serve it. Without this the item was flagged has_audio=True but the
+        # clip was never stored, so playback 404'd.
+        if payload.audio_base64:
+            await self._audio_repo.save(
+                content_id,
+                audio_base64=payload.audio_base64,
+                language=payload.audio_language or "hi",
+                source=payload.audio_source or "sarvam_tts",
+            )
+
         logger.info("Ingested content %s ('%s') from %s", item.content_id, item.title, item.creator_id)
         return item, report
 
