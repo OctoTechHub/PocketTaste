@@ -1,10 +1,16 @@
 "use client";
 
-// Small presentational primitives shared by the Studio and Admin surfaces, plus
-// safe accessors for the loosely-typed (JsonRecord) API payloads.
+// Shared presentational primitives for the Studio + Admin surfaces. These wrap
+// the React Bits components (SpotlightCard, CountUp, ShinyText) so every tab
+// shares one interactive, consistent design language, plus safe accessors for
+// the loosely-typed (JsonRecord) API payloads.
 
-import type { ReactNode } from "react";
+import { motion, useReducedMotion } from "motion/react";
+import type { ComponentType, ReactNode } from "react";
 
+import CountUp from "@/components/CountUp";
+import ShinyText from "@/components/ShinyText";
+import SpotlightCard from "@/components/SpotlightCard";
 import { cn } from "@/lib/utils";
 
 // --- safe accessors ---------------------------------------------------------
@@ -20,23 +26,78 @@ export const arr = (v: unknown): unknown[] => (Array.isArray(v) ? v : []);
 export const pct = (v: unknown): string =>
   v == null || typeof v !== "number" ? "—" : `${Math.round(v * 100)}%`;
 
-// --- layout -----------------------------------------------------------------
+const SPOTLIGHT = "rgba(139, 140, 255, 0.14)" as const;
 
-export function Card({
+// --- motion reveal ----------------------------------------------------------
+
+/** Fade + slide-up entrance. `index` staggers items in a grid/list. */
+export function Reveal({
   children,
+  index = 0,
   className,
 }: {
   children: ReactNode;
+  index?: number;
   className?: string;
 }) {
+  const reduce = useReducedMotion();
   return (
-    <div
-      className={cn(
-        "rounded-2xl border border-white/10 bg-white/[0.03] p-5",
-        className,
-      )}
+    <motion.div
+      className={className}
+      initial={reduce ? { opacity: 0 } : { opacity: 0, y: 14 }}
+      whileInView={{ opacity: 1, y: 0 }}
+      viewport={{ once: true, margin: "-40px" }}
+      transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1], delay: Math.min(index * 0.05, 0.4) }}
     >
       {children}
+    </motion.div>
+  );
+}
+
+// --- layout -----------------------------------------------------------------
+
+/** Interactive spotlight card. Set `spotlight={false}` for a plain surface. */
+export function Card({
+  children,
+  className,
+  spotlight = true,
+}: {
+  children: ReactNode;
+  className?: string;
+  spotlight?: boolean;
+}) {
+  const cls = cn("rounded-2xl p-5", className);
+  if (!spotlight) {
+    return (
+      <div className={cn("border border-white/10 bg-white/[0.03]", cls)}>{children}</div>
+    );
+  }
+  return (
+    <SpotlightCard className={cls} spotlightColor={SPOTLIGHT}>
+      {children}
+    </SpotlightCard>
+  );
+}
+
+/** Consistent header for each Studio tab: icon + shimmering title + creator-POV subtitle. */
+export function TabHeader({
+  icon: Icon,
+  title,
+  subtitle,
+}: {
+  icon: ComponentType<{ className?: string }>;
+  title: string;
+  subtitle: string;
+}) {
+  return (
+    <div className="mb-6 flex items-center gap-3">
+      <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+        <Icon className="h-5 w-5" />
+      </span>
+      <div>
+        <ShinyText text={title} speed={4} className="text-xl font-bold" color="#e7e7ff" shineColor="#ffffff" />
+        <p className="text-sm text-muted-foreground">{subtitle}</p>
+      </div>
     </div>
   );
 }
@@ -63,21 +124,33 @@ export function SectionTitle({
   );
 }
 
+/** KPI tile. A numeric `value` animates up with CountUp; strings render as-is. */
 export function StatTile({
   label,
   value,
+  suffix,
   hint,
 }: {
   label: string;
-  value: ReactNode;
+  value: number | ReactNode;
+  suffix?: string;
   hint?: string;
 }) {
   return (
-    <div className="rounded-xl border border-white/10 bg-white/[0.02] p-4">
+    <SpotlightCard className="rounded-xl p-4" spotlightColor={SPOTLIGHT}>
       <p className="text-xs uppercase tracking-wide text-muted-foreground">{label}</p>
-      <p className="mt-1 text-2xl font-bold tabular-nums text-foreground">{value}</p>
+      <p className="mt-1 text-2xl font-bold tabular-nums text-foreground">
+        {typeof value === "number" ? (
+          <>
+            <CountUp to={value} separator="," duration={1.2} />
+            {suffix}
+          </>
+        ) : (
+          value
+        )}
+      </p>
       {hint ? <p className="mt-0.5 text-xs text-muted-foreground">{hint}</p> : null}
-    </div>
+    </SpotlightCard>
   );
 }
 
@@ -108,12 +181,16 @@ export function Pill({
 
 /** Horizontal meter, 0..1. */
 export function Meter({ value, tone = "primary" }: { value: number; tone?: "primary" | "warn" }) {
+  const reduce = useReducedMotion();
   const width = `${Math.max(0, Math.min(1, value)) * 100}%`;
   return (
     <span className="block h-1.5 w-full overflow-hidden rounded-full bg-white/10">
-      <span
+      <motion.span
         className={cn("block h-full rounded-full", tone === "warn" ? "bg-amber-400" : "bg-primary")}
-        style={{ width }}
+        initial={reduce ? { width } : { width: 0 }}
+        whileInView={{ width }}
+        viewport={{ once: true }}
+        transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
       />
     </span>
   );
@@ -121,7 +198,7 @@ export function Meter({ value, tone = "primary" }: { value: number; tone?: "prim
 
 export function EmptyState({ title, hint }: { title: string; hint?: string }) {
   return (
-    <Card className="text-center">
+    <Card className="text-center" spotlight={false}>
       <p className="font-semibold text-foreground">{title}</p>
       {hint ? <p className="mt-1 text-sm text-muted-foreground">{hint}</p> : null}
     </Card>

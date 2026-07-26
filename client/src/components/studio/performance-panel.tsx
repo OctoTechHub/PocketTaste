@@ -59,7 +59,11 @@ export function PerformancePanel() {
         <StatTile label="Stories" value={num(d.catalog_items)} />
         <StatTile label="With listeners" value={num(d.items_with_listeners)} />
         <StatTile label="Total listeners" value={num(d.total_listeners)} />
-        <StatTile label="Avg completion" value={pct(d.avg_completion_rate)} />
+        <StatTile
+          label="Avg completion"
+          value={Math.round(num(d.avg_completion_rate) * 100)}
+          suffix="%"
+        />
       </div>
 
       <div className="space-y-3">
