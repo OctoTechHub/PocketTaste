@@ -11,7 +11,7 @@
 
 import type { NextRequest } from "next/server";
 
-import { HAS_CREDENTIALS, WorkspaceTokenError, workspaceToken } from "./workspace-token";
+import { WorkspaceTokenError, credentialsDiagnosis, workspaceToken } from "./workspace-token";
 
 export const dynamic = "force-dynamic";
 
@@ -24,11 +24,6 @@ const DEFAULT_UPSTREAM =
     : "http://127.0.0.1:8000";
 
 const UPSTREAM = (process.env.API_UPSTREAM_URL ?? DEFAULT_UPSTREAM).replace(/\/$/, "");
-
-/** Told to the operator whenever the workspace leg is what failed. */
-const CREDENTIALS_HINT =
-  "Set DATABRICKS_HOST, DATABRICKS_CLIENT_ID and DATABRICKS_CLIENT_SECRET for a " +
-  "service principal with CAN_USE on the app.";
 
 /** Databricks Apps hostnames sit behind the OAuth proxy; nothing else does. */
 const BEHIND_OAUTH_PROXY = (() => {
@@ -94,12 +89,12 @@ async function upstreamHeaders(req: NextRequest): Promise<Headers> {
  * tells nobody anything.
  */
 function proxyFailure(response: Response): Response | null {
+  // The Apps proxy does not 401 an unusable token — it redirects to login, the
+  // same as for no token at all. So the diagnosis has to come from the config.
   const location = response.headers.get("location") ?? "";
   if (response.status >= 300 && response.status < 400 && /\/oidc\//.test(location)) {
     return envelope(
-      HAS_CREDENTIALS
-        ? `Databricks bounced the request to its login page. ${CREDENTIALS_HINT}`
-        : `Databricks Apps requires a workspace token. ${CREDENTIALS_HINT}`,
+      `Databricks bounced the request to its login page. ${credentialsDiagnosis()}`,
       502,
       { upstream: UPSTREAM, redirected_to: "workspace OAuth login" },
     );
@@ -119,8 +114,7 @@ function proxyFailure(response: Response): Response | null {
   // which sends you looking in exactly the wrong place.
   if ((response.status === 401 || response.status === 403) && !contentType.includes("json")) {
     return envelope(
-      `Databricks rejected the workspace credentials — a 'dapi…' personal access ` +
-        `token will not work here, the Apps proxy requires OAuth. ${CREDENTIALS_HINT}`,
+      `Databricks rejected the workspace credentials. ${credentialsDiagnosis()}`,
       502,
       { upstream: UPSTREAM, upstream_status: response.status },
     );
@@ -143,7 +137,7 @@ async function forward(req: NextRequest, path: string[]): Promise<Response> {
     headers = await upstreamHeaders(req);
   } catch (cause) {
     if (cause instanceof WorkspaceTokenError) {
-      return envelope(`${cause.message} ${CREDENTIALS_HINT}`, 502, { upstream: UPSTREAM });
+      return envelope(`${cause.message} ${credentialsDiagnosis()}`, 502, { upstream: UPSTREAM });
     }
     throw cause;
   }

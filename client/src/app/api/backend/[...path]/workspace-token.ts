@@ -5,8 +5,10 @@
 // again unattended. Instead the service principal's client credentials are
 // exchanged for a fresh token here and cached until just before it expires.
 //
-// DATABRICKS_TOKEN still wins if set, which keeps a quick manual test one env
-// var away — but it inherits that expiry, so it is not for production.
+// DATABRICKS_TOKEN is only a fallback for a quick manual test. It loses to
+// client credentials deliberately: a stale value there used to shadow a working
+// service principal, and because the Apps proxy answers a bad token with a
+// redirect rather than a 401, that failure looked identical to no token at all.
 
 // The workspace host is not a secret — it is in the README and the app URL. Defaulting
 // it means only two variables have to be set in the deployment, and a missing host can
@@ -19,12 +21,42 @@ const DEFAULT_HOST = "https://dbc-8f4c336d-b2bc.cloud.databricks.com";
 const HOST = process.env.DATABRICKS_HOST?.trim() || DEFAULT_HOST;
 const CLIENT_ID = process.env.DATABRICKS_CLIENT_ID?.trim();
 const CLIENT_SECRET = process.env.DATABRICKS_CLIENT_SECRET?.trim();
-const STATIC_TOKEN = process.env.DATABRICKS_TOKEN?.trim();
+const RAW_STATIC_TOKEN = process.env.DATABRICKS_TOKEN?.trim();
+
+/** Personal access tokens are not merely rejected here — they are ignored. */
+const IS_PAT = /^dapi/i.test(RAW_STATIC_TOKEN ?? "");
+const STATIC_TOKEN = RAW_STATIC_TOKEN && !IS_PAT ? RAW_STATIC_TOKEN : undefined;
+
+const HAS_CLIENT_CREDENTIALS = Boolean(CLIENT_ID && CLIENT_SECRET);
 
 /** Refresh this far ahead of expiry so a request in flight can't age out. */
 const EXPIRY_MARGIN_MS = 120_000;
 
 export class WorkspaceTokenError extends Error {}
+
+/**
+ * Names the missing piece rather than listing every variable. The failure modes
+ * here are all invisible from the outside — a PAT, a half-filled service
+ * principal and no config at all produce the same login redirect.
+ */
+export function credentialsDiagnosis(): string {
+  if (HAS_CLIENT_CREDENTIALS) {
+    return "The service principal is configured but Databricks would not accept it — check it has CAN_USE on the app.";
+  }
+  if (IS_PAT) {
+    return (
+      "DATABRICKS_TOKEN holds a 'dapi…' personal access token, which the Apps proxy ignores " +
+      "outright. Remove it and set DATABRICKS_CLIENT_ID and DATABRICKS_CLIENT_SECRET instead."
+    );
+  }
+  if (CLIENT_ID && !CLIENT_SECRET) return "DATABRICKS_CLIENT_SECRET is not set.";
+  if (CLIENT_SECRET && !CLIENT_ID) return "DATABRICKS_CLIENT_ID is not set.";
+  if (STATIC_TOKEN) return "DATABRICKS_TOKEN was not accepted — it has most likely expired.";
+  return (
+    "No workspace credentials are set. Create a service principal with CAN_USE on the app " +
+    "and set DATABRICKS_HOST, DATABRICKS_CLIENT_ID and DATABRICKS_CLIENT_SECRET."
+  );
+}
 
 /** `https://host/?o=123` is what the workspace UI hands you; keep only the origin. */
 function tokenEndpoint(): string {
@@ -78,10 +110,9 @@ async function mint(): Promise<string> {
   return cached.token;
 }
 
-/** A valid workspace token, or null if this deployment has no credentials. */
+/** A valid workspace token, or null if this deployment has no usable credentials. */
 export async function workspaceToken(): Promise<string | null> {
-  if (STATIC_TOKEN) return STATIC_TOKEN;
-  if (!CLIENT_ID || !CLIENT_SECRET) return null;
+  if (!HAS_CLIENT_CREDENTIALS) return STATIC_TOKEN ?? null;
   if (cached && Date.now() < cached.expiresAt) return cached.token;
 
   inFlight ??= mint().finally(() => {
@@ -89,6 +120,3 @@ export async function workspaceToken(): Promise<string | null> {
   });
   return inFlight;
 }
-
-/** Whether credentials exist at all — drives the "what do I set?" error text. */
-export const HAS_CREDENTIALS = Boolean(STATIC_TOKEN || (CLIENT_ID && CLIENT_SECRET));
