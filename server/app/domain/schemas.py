@@ -5,6 +5,8 @@ from __future__ import annotations
 
 from datetime import datetime
 
+from typing import Literal
+
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.core.clock import utcnow
@@ -286,6 +288,9 @@ class DiscoveryResponse(ApiModel):
 
 class StoryOutlineRequest(ApiModel):
     premise: str = Field(min_length=10, max_length=2000)
+    #: "fast" is one structured OpenAI call that keeps GOAT's artefacts; "goat" runs
+    #: the upstream staged chain, which is more consistent and several times slower.
+    engine: Literal["fast", "goat"] = "fast"
     working_title: str = Field(default="", max_length=200)
     genre: str = Field(default="fantasy", max_length=40)
     language: str = Field(default="en", max_length=8)
@@ -294,9 +299,11 @@ class StoryOutlineRequest(ApiModel):
 
 
 class StoryDraftRequest(ApiModel):
-    """Outline *and* written scene text, via the full GOAT chain."""
+    """Outline *and* written scene text."""
 
     premise: str = Field(min_length=10, max_length=2000)
+    #: See StoryOutlineRequest.engine. On "fast" the scenes are written concurrently.
+    engine: Literal["fast", "goat"] = "fast"
     working_title: str = Field(default="", max_length=200)
     genre: str = Field(default="fantasy", max_length=40)
     language: str = Field(default="en", max_length=8)

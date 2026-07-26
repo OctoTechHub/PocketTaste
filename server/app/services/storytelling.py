@@ -26,6 +26,7 @@ from app.core.config import Settings
 from app.core.logging import get_logger
 from app.domain.enums import RiskLevel
 from app.domain.models import ContentItem, ContentProfile, DemandReport, SimilarityReport
+from app.services.fast_story_engine import FastStoryEngine
 from app.services.goat_agent import GoatStorytellingEngine, flatten_chapters
 from app.services.llm import LlmService
 from app.services.sarvam_finishing import SarvamFinishingService
@@ -82,15 +83,28 @@ class StorytellingService:
         similarity: SimilarityService,
         goat: GoatStorytellingEngine,
         sarvam: SarvamFinishingService,
+        fast: FastStoryEngine,
     ) -> None:
         self._settings = settings
         self._llm = llm
         self._similarity = similarity
         self._goat = goat
         self._sarvam = sarvam
+        self._fast = fast
 
     def describe_engine(self) -> dict:
-        return self._goat.describe()
+        return {
+            "default": "fast",
+            "why": (
+                "GOAT stages every step, which is what makes its outlines consistent and "
+                "also what makes them slow: 2-5 sequential model calls for an outline and "
+                "one more per scene. The fast engine keeps GOAT's artefacts -- book spec, "
+                "three acts, per-chapter beat and hook -- in a single structured call. "
+                "Pass engine='goat' to run the upstream chain instead."
+            ),
+            "fast": self._fast.describe(),
+            "goat": self._goat.describe(),
+        }
 
     async def outline(
         self,
@@ -105,6 +119,7 @@ class StorytellingService:
         catalog: list[ContentItem],
         profiles: dict[str, ContentProfile],
         demand: DemandReport | None,
+        engine_name: str = "fast",
     ) -> dict:
         # --- stage 0: screen before writing ---------------------------------
         screening = await self._similarity.screen(
@@ -132,12 +147,29 @@ class StorytellingService:
         if screening.risk is RiskLevel.BLOCK:
             return self._blocked_response(working_title, premise, screening, demand_context)
 
-        # --- outline: GOAT if we have it, staged prompts otherwise ----------
-        if self._goat.available:
+        # --- outline: fast by default, the upstream GOAT chain on request ----
+        #
+        # Three tiers, each a real fallback rather than a pretence: the single-call
+        # fast engine, then GOAT's staged chain, then plain staged prompts. A creator
+        # never sees "generation failed" because one engine had a bad minute.
+        world = chapters = engine = None
+        if engine_name == "goat" and self._goat.available:
             world, chapters, engine = await self._outline_with_goat(
                 premise, genre, language, tone, target_chapters, avoid
             )
-        else:
+        elif self._fast.available:
+            try:
+                world, chapters, engine = await self._outline_fast(
+                    premise, genre, language, tone, target_chapters, avoid
+                )
+            except Exception as exc:  # noqa: BLE001 - fall through to the next engine
+                logger.warning("Fast outline failed (%s); falling back to GOAT", exc)
+
+        if chapters is None and self._goat.available:
+            world, chapters, engine = await self._outline_with_goat(
+                premise, genre, language, tone, target_chapters, avoid
+            )
+        if chapters is None:
             world = await self._build_world(premise, genre, language, tone)
             chapters = await self._build_chapters(world, genre, language, target_chapters, avoid)
             engine = {
@@ -197,6 +229,7 @@ class StorytellingService:
         demand: DemandReport | None,
         localize_to: str | None = None,
         narrate: bool = False,
+        engine_name: str = "fast",
     ) -> dict:
         """Screen, then run GOAT all the way to actual scene text.
 
@@ -236,9 +269,31 @@ class StorytellingService:
                 "finishing": {"available": self._sarvam.available, "reason": "blocked_before_generation"},
             }
 
+        # Fast path: outline in one call, then all scenes concurrently. GOAT writes
+        # scenes serially so each sees the previous prose, which is better continuity
+        # and roughly four times the wall clock. `engine="goat"` still gets that.
+        if engine_name != "goat" and self._fast.available:
+            try:
+                return await self._draft_fast(
+                    premise=premise,
+                    working_title=working_title,
+                    genre=genre,
+                    language=language,
+                    tone=tone,
+                    target_chapters=target_chapters,
+                    scenes_to_write=scenes_to_write,
+                    avoid=self._avoid_patterns(demand),
+                    screening=screening,
+                    demand_context=demand_context,
+                    localize_to=localize_to,
+                    narrate=narrate,
+                )
+            except Exception as exc:  # noqa: BLE001 - fall through to GOAT
+                logger.warning("Fast draft failed (%s); falling back to GOAT", exc)
+
         if not self._goat.available:
             raise RuntimeError(
-                "Scene writing requires the GOAT engine. "
+                "Scene writing requires an engine. "
                 f"{self._goat.describe()['import_error'] or 'No LLM configured.'}"
             )
 
@@ -306,6 +361,110 @@ class StorytellingService:
         }
 
     # --- GOAT path ----------------------------------------------------------
+
+    async def _draft_fast(
+        self,
+        *,
+        premise: str,
+        working_title: str,
+        genre: str,
+        language: str,
+        tone: str,
+        target_chapters: int,
+        scenes_to_write: int,
+        avoid: list[str],
+        screening,
+        demand_context: dict,
+        localize_to: str | None,
+        narrate: bool,
+    ) -> dict:
+        """Outline once, then write every scene at the same time."""
+        plan = await self._fast.outline(
+            premise=premise, genre=genre, language=language, tone=tone,
+            target_chapters=target_chapters, avoid=avoid,
+        )
+        spec, chapters = plan["spec"], plan["chapters"]
+        scenes = await self._fast.scenes(
+            spec=spec, chapters=chapters, language=language, count=scenes_to_write
+        )
+        scene_text = "\n\n".join(scene["text"] for scene in scenes if scene.get("text"))
+        finishing = await self._sarvam.finish(
+            scene_text, source_language=language, target_language=localize_to, narrate=narrate
+        )
+        return {
+            "working_title": working_title or spec.get("Title") or premise[:80],
+            "logline": spec.get("Premise", "")[:400],
+            "setting": spec.get("Setting", ""),
+            "characters": self._parse_goat_characters(spec.get("Characters", "")),
+            "chapters": chapters,
+            "scenes": scenes,
+            "scene_text": scene_text,
+            "engine": {
+                "name": "fast_openai",
+                "goat_used": False,
+                "model": plan.get("model"),
+                "calls": 1 + len(scenes),
+                "note": (
+                    "Outline in one structured call; scenes written concurrently. "
+                    "engine='goat' runs the upstream serial chain instead, which keeps "
+                    "tighter continuity because each scene reads the previous prose."
+                ),
+            },
+            "goat_trace": [],
+            "originality": {
+                "risk": screening.risk.value,
+                "originality_score": screening.originality_score,
+                "top_similarity": screening.top_score,
+                "duplicate_kind": screening.duplicate_kind.value,
+                "closest_matches": [
+                    {"content_id": m.content_id, "title": m.title, "score": m.combined_score}
+                    for m in screening.matches[:3]
+                ],
+                "explanation": screening.explanation,
+                "disclaimer": screening.disclaimer,
+            },
+            "demand_context": demand_context,
+            "finishing": finishing,
+        }
+
+    async def _outline_fast(
+        self,
+        premise: str,
+        genre: str,
+        language: str,
+        tone: str,
+        target_chapters: int,
+        avoid: list[str],
+    ) -> tuple[dict, list[dict], dict]:
+        """One structured call, adapted to the same shape the GOAT path returns."""
+        result = await self._fast.outline(
+            premise=premise,
+            genre=genre,
+            language=language,
+            tone=tone,
+            target_chapters=target_chapters,
+            avoid=avoid,
+        )
+        spec = result["spec"]
+        world = {
+            "logline": spec.get("Premise") or premise[:160],
+            "setting": spec.get("Setting", ""),
+            "characters": self._parse_goat_characters(spec.get("Characters", "")),
+            "themes": spec.get("Themes", ""),
+        }
+        engine = {
+            "name": "fast_openai",
+            "goat_used": False,
+            "model": result.get("model"),
+            "calls": result.get("calls", 1),
+            "acts": len(result.get("acts") or []),
+            "note": (
+                "GOAT's artefacts -- book spec, three acts, per-chapter beat and hook -- "
+                "produced in one structured call instead of a sequential chain. "
+                "Pass engine='goat' for the upstream implementation."
+            ),
+        }
+        return world, result["chapters"], engine
 
     async def _outline_with_goat(
         self,

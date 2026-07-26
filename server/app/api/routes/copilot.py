@@ -35,6 +35,7 @@ async def outline(
         catalog=catalog,
         profiles=profiles,
         demand=demand,
+        engine_name=payload.engine,
     )
     return result | {
         "method": {
@@ -85,6 +86,7 @@ async def draft(
             demand=demand,
             localize_to=payload.localize_to.lower() if payload.localize_to else None,
             narrate=payload.narrate,
+            engine_name=payload.engine,
         )
     except RuntimeError as exc:
         raise DependencyUnavailableError(str(exc)) from exc

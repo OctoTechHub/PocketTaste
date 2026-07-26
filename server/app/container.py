@@ -34,6 +34,7 @@ from app.data.repositories import (
 from app.services.auth_service import AuthService
 from app.services.blend import BlendService
 from app.services.blend_service import BlendApplicationService
+from app.services.fast_story_engine import FastStoryEngine
 from app.services.catalog_service import ActivityService, CatalogService
 from app.services.content_intelligence import ContentIntelligenceService
 from app.services.context_cache import RankingContextCache
@@ -84,6 +85,7 @@ class Container:
     storytelling: StorytellingService
     goat: GoatStorytellingEngine
     sarvam_finishing: SarvamFinishingService
+    fast_story: FastStoryEngine
     blend_algorithm: BlendService
     blend_service: BlendApplicationService
     auth: AuthService
@@ -135,7 +137,10 @@ def build_container(settings: Settings, gateway: MongoGateway) -> Container:
     goat = GoatStorytellingEngine(settings)
     auth = AuthService(settings, accounts_repo)
     sarvam_finishing = SarvamFinishingService(settings, llm)
-    storytelling = StorytellingService(settings, llm, similarity, goat, sarvam_finishing)
+    fast_story = FastStoryEngine(settings, llm)
+    storytelling = StorytellingService(
+        settings, llm, similarity, goat, sarvam_finishing, fast_story
+    )
     catalog_service = CatalogService(
         settings, content_repo, profile_repo, similarity_audit_repo, similarity, discovery
     )
@@ -190,6 +195,7 @@ def build_container(settings: Settings, gateway: MongoGateway) -> Container:
         storytelling=storytelling,
         goat=goat,
         sarvam_finishing=sarvam_finishing,
+        fast_story=fast_story,
         blend_algorithm=blend_algorithm,
         blend_service=blend_service,
         auth=auth,
