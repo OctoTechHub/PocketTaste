@@ -27,18 +27,14 @@ export function OpportunitiesPanel({
   /** Sends a segment to the Copilot tab, prefilled, and switches to it. */
   onWriteThis: (seed: WriteThisSeed) => void;
 }) {
-  const { data, isLoading, isError, error } = useCreatorOpportunities();
+  const { data, isLoading, isError } = useCreatorOpportunities();
 
   if (isLoading) return <PanelLoader />;
   if (isError || !data) {
     return (
       <EmptyState
-        title="No demand report yet"
-        hint={
-          error instanceof Error
-            ? error.message
-            : "Run the pipeline (Admin → Pipeline) or GET /insights/demand?refresh=true."
-        }
+        title="Gathering your opportunities"
+        hint="We’re still learning what your audience wants. Check back once there’s a little more listening activity."
       />
     );
   }

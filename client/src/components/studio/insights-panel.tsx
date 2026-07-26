@@ -10,7 +10,6 @@ import {
   str,
   Card,
   EmptyState,
-  JsonBlock,
   Pill,
   ProvenanceNote,
   SectionTitle,
@@ -33,8 +32,8 @@ export function InsightsPanel() {
   if (demand.isError) {
     return (
       <EmptyState
-        title="No demand report yet"
-        hint="Run the pipeline from the Admin tab, then reload."
+        title="Audience insights are on the way"
+        hint="Once there’s enough listening across the catalog, demand and saturation land here."
       />
     );
   }
@@ -119,8 +118,6 @@ export function InsightsPanel() {
           </p>
         )}
       </section>
-
-      <JsonBlock data={demand.data} label="Full demand report" />
     </div>
   );
 }

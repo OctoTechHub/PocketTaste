@@ -8,7 +8,7 @@ import { useUploadContent } from "@/hooks/api/use-catalog";
 import { useSimilarityCheck } from "@/hooks/api/use-creator";
 import { ApiError } from "@/lib/api/client";
 import type { ContentCreate } from "@/lib/api/types";
-import { asRec, num, str, Card, JsonBlock, Pill, SectionTitle } from "./ui";
+import { asRec, num, str, Card, Pill, SectionTitle } from "./ui";
 
 const RISK_TONE = { clear: "good", review: "warn", block: "bad" } as const;
 
@@ -105,41 +105,49 @@ export function UploadPanel() {
 
           {upload.isError ? (
             <p className="text-sm text-destructive">
-              {upload.error instanceof ApiError ? upload.error.message : "Upload failed."}
               {upload.error instanceof ApiError && upload.error.status === 409
-                ? " — blocked by the similarity gate."
-                : ""}
+                ? "This is too similar to an existing story — try a more original angle."
+                : "Couldn’t publish just yet. Please try again."}
             </p>
           ) : null}
           {upload.isSuccess ? (
-            <p className="text-sm text-emerald-400">
-              Uploaded as {str(asRec(upload.data).content_id)}.
-            </p>
+            <p className="text-sm text-emerald-400">Published! It’s now in your catalog.</p>
           ) : null}
         </form>
       </Card>
 
       <div className="space-y-3">
-        <SectionTitle title="Screening report" subtitle="POST /similarity/check" />
+        <SectionTitle title="Originality check" subtitle="How your draft compares to the catalog." />
         {screen.isPending ? (
-          <Card>Screening the draft…</Card>
+          <Card className="text-sm text-muted-foreground">Checking your draft…</Card>
         ) : screen.data ? (
           <Card className="space-y-3">
             <div className="flex items-center gap-2">
-              <span className="text-sm text-muted-foreground">Verdict</span>
-              <Pill tone={RISK_TONE[verdict] ?? "neutral"}>{verdict || "—"}</Pill>
+              <Pill tone={RISK_TONE[verdict] ?? "neutral"}>{VERDICT_LABEL[verdict] ?? "Reviewed"}</Pill>
               <span className="ml-auto text-sm tabular-nums text-muted-foreground">
-                score {num(report.combined_score ?? report.score).toFixed(2)}
+                {Math.round((1 - num(report.combined_score ?? report.score)) * 100)}% original
               </span>
             </div>
-            <JsonBlock data={screen.data} label="Signal breakdown" />
+            <p className="text-sm text-muted-foreground">{VERDICT_HINT[verdict] ?? ""}</p>
           </Card>
         ) : (
           <Card className="text-sm text-muted-foreground">
-            Run “Screen for duplicates” to check your draft against the catalog before uploading.
+            Run the originality check to see how your draft compares before publishing.
           </Card>
         )}
       </div>
     </div>
   );
 }
+
+const VERDICT_LABEL: Record<string, string> = {
+  clear: "Original",
+  review: "Worth a second look",
+  block: "Too similar",
+};
+
+const VERDICT_HINT: Record<string, string> = {
+  clear: "Looks fresh — nothing close in the catalog.",
+  review: "Some overlap with existing stories. You can still publish it.",
+  block: "Very close to something already published. Consider a new angle.",
+};

@@ -2,11 +2,11 @@
 
 import { Loader } from "@/components/motion/loader";
 import { useContentDropOff } from "@/hooks/api/use-analytics";
-import { arr, asRec, num, pct, str, Card, JsonBlock, Meter, Pill } from "./ui";
+import { arr, asRec, num, pct, str, Card, Meter, Pill } from "./ui";
 
 /** Retention curve + plain-English drop-off diagnosis for one story. */
 export function ContentAnalytics({ contentId }: { contentId: string }) {
-  const { data, isLoading, isError, error } = useContentDropOff(contentId);
+  const { data, isLoading, isError } = useContentDropOff(contentId);
 
   if (isLoading) {
     return (
@@ -18,7 +18,7 @@ export function ContentAnalytics({ contentId }: { contentId: string }) {
   if (isError || !data) {
     return (
       <p className="py-3 text-sm text-muted-foreground">
-        {error instanceof Error ? error.message : "No analytics yet — run the pipeline first."}
+        Detailed retention for this story will appear once it has some listens.
       </p>
     );
   }
@@ -77,12 +77,9 @@ export function ContentAnalytics({ contentId }: { contentId: string }) {
 
       <div className="flex items-center gap-2">
         <Pill tone={confidence === "high" ? "good" : confidence === "no_data" ? "bad" : "warn"}>
-          confidence: {confidence}
+          {confidence === "no_data" ? "not enough data" : `${confidence} confidence`}
         </Pill>
-        <Pill>{str(d.provenance, "—")}</Pill>
       </div>
-
-      <JsonBlock data={data} label="Full analytics payload" />
     </div>
   );
 }
