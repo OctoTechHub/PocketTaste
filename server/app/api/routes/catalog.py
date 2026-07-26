@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Query, status
+import base64
+
+from fastapi import APIRouter, Query, Request, Response, status
 
 from app.api.deps import CurrentAccount, StorageDep
 from app.core.errors import NotFoundError
@@ -100,3 +102,39 @@ async def get_audio(content_id: str, container: StorageDep) -> dict:
         "bytes": clip.bytes if clip else 0,
         "audio_base64": clip.audio_base64 if clip else "",
     }
+
+
+@router.get("/{content_id}/audio.wav", summary="Narrated audio as a streamable file (Range-capable)")
+async def stream_audio(content_id: str, request: Request, container: StorageDep) -> Response:
+    """Streams the narrated clip as real audio bytes so the player can start
+    immediately and seek — instead of shipping a ~15MB base64 blob to the client
+    and stuffing it into a data: URI."""
+    clip = await container.audio_repo.get(content_id)
+    if clip is None or not clip.audio_base64:
+        raise NotFoundError(f"No narrated audio for '{content_id}'.")
+
+    data = base64.b64decode(clip.audio_base64)
+    total = len(data)
+    fmt = (clip.format or "wav").lower()
+    media_type = "audio/wav" if fmt in ("wav", "x-wav") else f"audio/{fmt}"
+    base_headers = {"Accept-Ranges": "bytes", "Cache-Control": "public, max-age=3600"}
+
+    range_header = request.headers.get("range")
+    if range_header and range_header.startswith("bytes="):
+        start_s, _, end_s = range_header.removeprefix("bytes=").partition("-")
+        start = int(start_s) if start_s.isdigit() else 0
+        end = int(end_s) if end_s.isdigit() else total - 1
+        end = min(end, total - 1)
+        if start > end or start >= total:
+            return Response(status_code=416, headers={"Content-Range": f"bytes */{total}"})
+        chunk = data[start : end + 1]
+        return Response(
+            content=chunk,
+            status_code=206,
+            media_type=media_type,
+            headers={**base_headers, "Content-Range": f"bytes {start}-{end}/{total}",
+                     "Content-Length": str(len(chunk))},
+        )
+
+    return Response(content=data, media_type=media_type,
+                    headers={**base_headers, "Content-Length": str(total)})
