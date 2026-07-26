@@ -52,13 +52,13 @@ export function UnderTheHood({
   }, [stages, open]);
 
   return (
-    <section className="overflow-hidden rounded-2xl border border-white/10 bg-white/[0.03]">
+    <section className="overflow-hidden rounded-2xl border border-border bg-card">
       <button
         type="button"
         onClick={() => setOpen((value) => !value)}
         aria-expanded={open}
         aria-controls="blend-log"
-        className="flex min-h-11 w-full items-center gap-2.5 px-4 text-left transition-colors hover:bg-white/[0.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+        className="flex min-h-11 w-full items-center gap-2.5 px-4 text-left transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
       >
         <Terminal className="h-3.5 w-3.5 shrink-0 text-primary" aria-hidden />
         <span className="text-[11px] font-black uppercase tracking-[0.2em] text-muted-foreground">
@@ -93,7 +93,7 @@ export function UnderTheHood({
           role="log"
           aria-live="polite"
           aria-busy={isStreaming}
-          className="h-[168px] overflow-y-auto border-t border-white/10 px-4 py-2.5 font-mono text-[11px] leading-[1.7]"
+          className="h-[168px] overflow-y-auto border-t border-border px-4 py-2.5 font-mono text-[11px] leading-[1.7]"
         >
           {stages.length === 0 ? (
             <p className="text-muted-foreground">waiting for the server…</p>

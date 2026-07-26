@@ -74,7 +74,7 @@ function InviteCard({ compact = false }: { compact?: boolean }) {
           placeholder="friend@gmail.com"
           aria-label="Your friend's email address"
           aria-describedby={create.isError ? "blend-email-error" : undefined}
-          className="min-h-11 flex-1 rounded-full border border-white/10 bg-white/[0.04] px-5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="min-h-11 flex-1 rounded-full border border-border bg-card px-5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         />
         <button
           type="submit"
@@ -128,7 +128,7 @@ function Hero({
   const [you, them] = members;
   return (
     <div
-      className="rounded-2xl border border-white/10 p-5 sm:p-6"
+      className="rounded-2xl border border-border p-5 sm:p-6"
       style={{
         background: `linear-gradient(135deg, color-mix(in oklab, ${YOU} 26%, transparent), color-mix(in oklab, ${THEM} 26%, transparent))`,
       }}
@@ -178,7 +178,7 @@ function TrackRow({
       : members.find((member) => member.user_id === item.owner)?.display_name ?? "—";
 
   return (
-    <li className="group grid grid-cols-[24px_minmax(0,1fr)_auto] items-center gap-3 rounded-xl px-2 py-2.5 transition-colors hover:bg-white/[0.05] sm:grid-cols-[24px_minmax(0,2fr)_minmax(0,1fr)_auto] sm:gap-4 sm:px-3">
+    <li className="group grid grid-cols-[24px_minmax(0,1fr)_auto] items-center gap-3 rounded-xl px-2 py-2.5 transition-colors hover:bg-muted sm:grid-cols-[24px_minmax(0,2fr)_minmax(0,1fr)_auto] sm:gap-4 sm:px-3">
       <span className="relative grid h-6 w-6 place-items-center">
         <span className="text-sm tabular-nums text-muted-foreground group-hover:opacity-0">
           {index + 1}
@@ -253,7 +253,7 @@ function MixBar({
       <p className="text-xs font-black uppercase tracking-[0.2em] text-muted-foreground">
         Who this feed came from
       </p>
-      <div className="mt-3 flex h-2 gap-0.5 overflow-hidden rounded-full bg-white/5">
+      <div className="mt-3 flex h-2 gap-0.5 overflow-hidden rounded-full bg-muted">
         {parts.map((part) => (
           <span
             key={part.label}
@@ -308,7 +308,7 @@ function BlendView({ blendId }: { blendId: string }) {
         />
       ) : (
         // Same height as the settled hero, so the log below never jumps.
-        <div className="h-[172px] animate-pulse rounded-2xl border border-white/10 bg-white/[0.03] motion-reduce:animate-none sm:h-[164px]" />
+        <div className="h-[172px] animate-pulse rounded-2xl border border-border bg-card motion-reduce:animate-none sm:h-[164px]" />
       )}
 
       <UnderTheHood stages={stages} isStreaming={isStreaming} />
@@ -345,7 +345,7 @@ function BlendView({ blendId }: { blendId: string }) {
           {[0, 1, 2, 3, 4, 5].map((row) => (
             <div
               key={row}
-              className="h-[52px] animate-pulse rounded-xl border border-white/10 bg-white/[0.03] motion-reduce:animate-none"
+              className="h-[52px] animate-pulse rounded-xl border border-border bg-card motion-reduce:animate-none"
             />
           ))}
         </div>
@@ -393,7 +393,7 @@ export function BlendShell() {
             </p>
           </Card>
         ) : isPending ? (
-          <div className="h-[220px] animate-pulse rounded-2xl border border-white/10 bg-white/[0.03] motion-reduce:animate-none" />
+          <div className="h-[220px] animate-pulse rounded-2xl border border-border bg-card motion-reduce:animate-none" />
         ) : blends.length === 0 ? (
           <Reveal>
             <TabHeader
@@ -420,11 +420,12 @@ export function BlendShell() {
                         "inline-flex min-h-11 items-center gap-2 rounded-full px-4 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
                         active
                           ? "bg-primary text-primary-foreground"
-                          : "border border-white/10 text-muted-foreground hover:text-foreground",
+                          : "border border-border text-muted-foreground hover:text-foreground",
                       )}
                     >
                       <span
                         className="grid h-5 w-5 place-items-center rounded-full text-[10px] font-black text-white"
+                        /* white on THEM measures 5.6:1 */
                         style={{ background: THEM }}
                         aria-hidden
                       >

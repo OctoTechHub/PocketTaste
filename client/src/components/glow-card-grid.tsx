@@ -68,7 +68,7 @@ export function GlowCard({ name, handle, avatar, thumb, meta, href, index = 0 }:
       {/* ring that lights up */}
       <div
         aria-hidden
-        className="pointer-events-none absolute inset-0 z-20 rounded-xl ring-1 ring-inset ring-white/0 transition duration-300 group-hover/glow:ring-white/20"
+        className="pointer-events-none absolute inset-0 z-20 rounded-xl ring-1 ring-inset ring-transparent transition duration-300 group-hover/glow:ring-foreground/20"
       />
 
       {thumb ? (
@@ -82,7 +82,7 @@ export function GlowCard({ name, handle, avatar, thumb, meta, href, index = 0 }:
               className="absolute inset-0 h-full w-full object-cover transition-transform duration-500 group-hover/glow:scale-105"
             />
             {meta && (
-              <span className="absolute right-2 top-2 rounded bg-black/70 px-1.5 py-0.5 font-mono text-xs text-white tabular-nums">
+              <span className="absolute right-2 top-2 rounded bg-foreground/45 px-1.5 py-0.5 font-mono text-xs text-background tabular-nums">
                 {meta}
               </span>
             )}

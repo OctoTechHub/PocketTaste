@@ -25,7 +25,7 @@ export function ReferenceCard({
   const q = useQuery({ queryKey, queryFn: fetcher, enabled: open, staleTime: 300_000 });
 
   return (
-    <div className="rounded-xl border border-white/10 bg-white/[0.02]">
+    <div className="rounded-xl border border-border bg-card">
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
@@ -38,7 +38,7 @@ export function ReferenceCard({
         <span className="text-xs text-muted-foreground">{open ? "hide" : "fetch"}</span>
       </button>
       {open ? (
-        <div className="border-t border-white/10 p-3">
+        <div className="border-t border-border p-3">
           {q.isLoading ? (
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <Loader variant="dots" size={14} /> Loading…

@@ -75,7 +75,7 @@ export function Card({
   const cls = cn("rounded-2xl p-5", className);
   if (!spotlight) {
     return (
-      <div className={cn("border border-white/10 bg-white/[0.03]", cls)}>{children}</div>
+      <div className={cn("border border-border bg-card", cls)}>{children}</div>
     );
   }
   return (
@@ -101,7 +101,7 @@ export function TabHeader({
         <Icon className="h-5 w-5" />
       </span>
       <div>
-        <ShinyText text={title} speed={4} className="text-xl font-bold" color="#f5f5f4" shineColor="#facc15" />
+        <ShinyText text={title} speed={4} className="text-xl font-bold" color="#1b1610" shineColor="#a56300" />
         <p className="text-sm text-muted-foreground">{subtitle}</p>
       </div>
     </div>
@@ -168,10 +168,10 @@ export function Pill({
   tone?: "neutral" | "good" | "warn" | "bad";
 }) {
   const tones = {
-    neutral: "bg-white/10 text-foreground",
-    good: "bg-emerald-500/15 text-emerald-300",
-    warn: "bg-amber-500/15 text-amber-300",
-    bad: "bg-red-500/15 text-red-300",
+    neutral: "bg-muted text-foreground",
+    good: "bg-success/15 text-success",
+    warn: "bg-highlight/40 text-foreground",
+    bad: "bg-destructive/12 text-destructive",
   } as const;
   return (
     <span
@@ -190,9 +190,9 @@ export function Meter({ value, tone = "primary" }: { value: number; tone?: "prim
   const reduce = useReducedMotion();
   const width = `${Math.max(0, Math.min(1, value)) * 100}%`;
   return (
-    <span className="block h-1.5 w-full overflow-hidden rounded-full bg-white/10">
+    <span className="block h-1.5 w-full overflow-hidden rounded-full bg-muted">
       <motion.span
-        className={cn("block h-full rounded-full", tone === "warn" ? "bg-amber-400" : "bg-primary")}
+        className={cn("block h-full rounded-full", tone === "warn" ? "bg-highlight" : "bg-primary")}
         initial={reduce ? { width } : { width: 0 }}
         whileInView={{ width }}
         viewport={{ once: true }}
@@ -214,7 +214,7 @@ export function EmptyState({ title, hint }: { title: string; hint?: string }) {
 /** Collapsible pretty-printed JSON, for payload fields we don't render bespoke. */
 export function JsonBlock({ data, label = "Raw response" }: { data: unknown; label?: string }) {
   return (
-    <details className="rounded-xl border border-white/10 bg-black/30">
+    <details className="rounded-xl border border-border bg-muted/70">
       <summary className="cursor-pointer select-none px-4 py-2 text-xs font-medium text-muted-foreground">
         {label}
       </summary>
@@ -242,10 +242,10 @@ export function ProvenanceNote({ provenance }: { provenance?: unknown; notice?: 
     <span
       className={cn(
         "inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium",
-        real ? "bg-emerald-500/12 text-emerald-300" : "bg-white/8 text-muted-foreground",
+        real ? "bg-success/15 text-success" : "bg-muted text-muted-foreground",
       )}
     >
-      <span className={cn("h-1.5 w-1.5 rounded-full", real ? "bg-emerald-400" : "bg-amber-400")} />
+      <span className={cn("h-1.5 w-1.5 rounded-full", real ? "bg-success" : "bg-highlight")} />
       {PROVENANCE_LABEL[p] ?? "Audience data"}
     </span>
   );

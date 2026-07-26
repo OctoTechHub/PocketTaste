@@ -56,9 +56,9 @@ export function InsightsPanel() {
           </Card>
         ) : null}
         {segments.length ? (
-          <div className="overflow-x-auto rounded-xl border border-white/10">
+          <div className="overflow-x-auto rounded-xl border border-border">
             <table className="w-full text-sm">
-              <thead className="bg-white/5 text-left text-xs uppercase tracking-wide text-muted-foreground">
+              <thead className="bg-muted text-left text-xs uppercase tracking-wide text-muted-foreground">
                 <tr>
                   <th className="px-3 py-2">Segment</th>
                   <th className="px-3 py-2">Opportunity</th>
@@ -69,7 +69,7 @@ export function InsightsPanel() {
               </thead>
               <tbody>
                 {segments.slice(0, 20).map((row, i) => (
-                  <tr key={i} className="border-t border-white/5">
+                  <tr key={i} className="border-t border-border/60">
                     <td className="px-3 py-2 font-medium text-foreground">{str(row.segment)}</td>
                     <td className="px-3 py-2 tabular-nums">{num(row.opportunity_score).toFixed(2)}</td>
                     <td className="px-3 py-2 tabular-nums">{pct(row.completion_rate)}</td>

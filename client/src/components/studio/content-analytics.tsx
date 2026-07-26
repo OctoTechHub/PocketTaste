@@ -53,8 +53,8 @@ export function ContentAnalytics({ contentId }: { contentId: string }) {
       ) : null}
 
       {weakest.title || weakest.chapter_index != null ? (
-        <Card className="bg-amber-500/[0.06] p-4">
-          <p className="text-xs uppercase tracking-wide text-amber-300/80">Weakest chapter</p>
+        <Card className="bg-highlight/15 p-4">
+          <p className="text-xs uppercase tracking-wide text-primary">Weakest chapter</p>
           <p className="mt-1 font-medium text-foreground">
             #{num(weakest.chapter_index)} · {str(weakest.title, "Untitled")}
           </p>
@@ -75,7 +75,7 @@ export function ContentAnalytics({ contentId }: { contentId: string }) {
 
 function Metric({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-lg border border-white/10 bg-white/[0.02] p-3">
+    <div className="rounded-lg border border-border bg-card p-3">
       <p className="text-[11px] uppercase tracking-wide text-muted-foreground">{label}</p>
       <p className="mt-0.5 text-lg font-bold tabular-nums text-foreground">{value}</p>
     </div>

@@ -111,7 +111,7 @@ export function UploadPanel() {
             </p>
           ) : null}
           {upload.isSuccess ? (
-            <p className="text-sm text-emerald-400">Published! It’s now in your catalog.</p>
+            <p className="text-sm text-success">Published! It’s now in your catalog.</p>
           ) : null}
         </form>
       </Card>

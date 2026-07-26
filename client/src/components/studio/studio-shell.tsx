@@ -130,7 +130,7 @@ export function StudioShell() {
                         transition={{ type: "spring", stiffness: 480, damping: 38 }}
                       />
                     ) : (
-                      <span className="absolute inset-0 -z-10 rounded-full border border-white/10" />
+                      <span className="absolute inset-0 -z-10 rounded-full border border-border" />
                     )}
                     <Icon className="h-4 w-4" />
                     {label}

@@ -114,7 +114,7 @@ function OppCard({
   const [genre, language] = segment.split("/");
 
   return (
-    <Card className="cursor-pointer transition-colors hover:border-primary/40 hover:bg-white/5">
+    <Card className="cursor-pointer transition-colors hover:border-primary/40 hover:bg-muted">
       <button
         type="button"
         onClick={() =>

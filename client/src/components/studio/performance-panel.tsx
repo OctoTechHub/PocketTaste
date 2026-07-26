@@ -103,7 +103,7 @@ export function PerformancePanel() {
                 />
               </button>
               {isOpen ? (
-                <div className="border-t border-white/10 px-4 pb-4">
+                <div className="border-t border-border px-4 pb-4">
                   <ContentAnalytics contentId={id} />
                 </div>
               ) : null}

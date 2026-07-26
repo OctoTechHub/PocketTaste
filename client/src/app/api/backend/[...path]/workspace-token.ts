@@ -8,7 +8,15 @@
 // DATABRICKS_TOKEN still wins if set, which keeps a quick manual test one env
 // var away — but it inherits that expiry, so it is not for production.
 
-const HOST = process.env.DATABRICKS_HOST?.trim();
+// The workspace host is not a secret — it is in the README and the app URL. Defaulting
+// it means only two variables have to be set in the deployment, and a missing host can
+// never be the reason production is down.
+const DEFAULT_HOST = "https://dbc-8f4c336d-b2bc.cloud.databricks.com";
+
+// The client id and secret are deliberately env-only. This repository is public, so a
+// checked-in fallback would publish the credential and GitHub secret scanning would
+// have Databricks revoke it. Server-only is not the same as private.
+const HOST = process.env.DATABRICKS_HOST?.trim() || DEFAULT_HOST;
 const CLIENT_ID = process.env.DATABRICKS_CLIENT_ID?.trim();
 const CLIENT_SECRET = process.env.DATABRICKS_CLIENT_SECRET?.trim();
 const STATIC_TOKEN = process.env.DATABRICKS_TOKEN?.trim();

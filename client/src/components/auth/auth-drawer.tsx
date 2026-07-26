@@ -64,17 +64,17 @@ export function AuthDrawer({
       open={open}
       onOpenChange={onOpenChange}
       ariaLabel="Account"
-      backdropClassName="bg-black/70 backdrop-blur"
+      backdropClassName="bg-foreground/45 backdrop-blur"
       // Opaque, slightly-elevated surface so nothing bleeds through the panel.
-      className="w-[420px] max-w-[92vw] gap-0 border-l border-white/10 bg-[oklch(0.16_0.03_265)] p-0"
+      className="w-[420px] max-w-[92vw] gap-0 border-l border-border bg-card p-0"
     >
       {/* Branded header */}
-      <div className="relative overflow-hidden border-b border-white/10 bg-gradient-to-br from-primary/15 via-transparent to-chart-4/10 px-7 pb-6 pt-7">
+      <div className="relative overflow-hidden border-b border-border bg-gradient-to-br from-primary/15 via-transparent to-chart-4/10 px-7 pb-6 pt-7">
         <button
           type="button"
           onClick={() => onOpenChange(false)}
           aria-label="Close"
-          className="absolute right-4 top-4 flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-white/10 hover:text-foreground"
+          className="absolute right-4 top-4 flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
         >
           <X className="h-4 w-4" />
         </button>
@@ -95,7 +95,7 @@ export function AuthDrawer({
       {/* Body */}
       <div className="flex flex-1 flex-col gap-5 px-7 py-6">
         {/* Segmented toggle */}
-        <div className="grid grid-cols-2 gap-1 rounded-full bg-white/5 p-1 text-sm">
+        <div className="grid grid-cols-2 gap-1 rounded-full bg-muted p-1 text-sm">
           {(["login", "register"] as const).map((m) => (
             <button
               key={m}
@@ -166,7 +166,7 @@ export function AuthDrawer({
           </StatefulButton>
         </form>
 
-        <p className="mt-auto border-t border-white/10 pt-4 text-xs leading-relaxed text-muted-foreground">
+        <p className="mt-auto border-t border-border pt-4 text-xs leading-relaxed text-muted-foreground">
           Your listening is logged to your account and powers the “For You” rail
           and creator insights.
         </p>

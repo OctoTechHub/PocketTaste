@@ -15,7 +15,15 @@ import { HAS_CREDENTIALS, WorkspaceTokenError, workspaceToken } from "./workspac
 
 export const dynamic = "force-dynamic";
 
-const UPSTREAM = (process.env.API_UPSTREAM_URL ?? "http://127.0.0.1:8000").replace(/\/$/, "");
+// Deployed builds default to the hosted API; `npm run dev` defaults to the local
+// server. Without the split, either local development silently proxies to production
+// or production has nowhere to go. `API_UPSTREAM_URL` overrides both.
+const DEFAULT_UPSTREAM =
+  process.env.NODE_ENV === "production"
+    ? "https://pockettaste-api-7474647028679809.aws.databricksapps.com"
+    : "http://127.0.0.1:8000";
+
+const UPSTREAM = (process.env.API_UPSTREAM_URL ?? DEFAULT_UPSTREAM).replace(/\/$/, "");
 
 /** Told to the operator whenever the workspace leg is what failed. */
 const CREDENTIALS_HINT =

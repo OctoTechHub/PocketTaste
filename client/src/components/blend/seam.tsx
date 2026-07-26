@@ -11,8 +11,13 @@
  * hues are never used for chrome, and the app's primary is never used for data.
  */
 
-export const YOU = "oklch(0.72 0.19 32)"; // ember
-export const THEM = "oklch(0.70 0.15 258)"; // indigo
+// Two-person identity colours. Darkened for the light theme: the old L≈0.71
+// pair was tuned to glow on a dark surface and only reached 2.7:1 against paper
+// (and the same against the white initials sitting on them). At L≈0.53 both
+// clear 5:1 as fills, stay far apart in hue (ember vs indigo — the safest pair
+// for colour-vision deficiency), and still read as two distinct people.
+export const YOU = "oklch(0.55 0.17 32)"; // ember
+export const THEM = "oklch(0.52 0.15 262)"; // indigo
 export const SHARED_COLOR = `color-mix(in oklab, ${YOU} 50%, ${THEM})`;
 
 /** `lean` is -1 (entirely you) .. +1 (entirely them). Returns 0..100 toward them. */
@@ -120,7 +125,7 @@ export function LeanBar({
       <span className="w-7 text-right text-[11px] font-semibold tabular-nums text-muted-foreground">
         {Math.round(youScore * 100)}
       </span>
-      <span className="relative h-[3px] w-full min-w-[72px] max-w-[128px] rounded-full bg-white/10">
+      <span className="relative h-[3px] w-full min-w-[72px] max-w-[128px] rounded-full bg-muted">
         <span
           className="absolute top-1/2 h-2 w-2 -translate-x-1/2 -translate-y-1/2 rounded-full"
           style={{ left: `${leanToPercent(lean)}%`, background: leanColor(lean) }}

@@ -364,7 +364,7 @@ export function CopilotPanel({ seed }: { seed: CopilotSeed | null }) {
         </div>
 
         {canNarrate ? (
-          <div className="space-y-3 border-t border-white/10 pt-4">
+          <div className="space-y-3 border-t border-border pt-4">
             <p className="text-sm font-medium text-foreground">Convert to voice</p>
             <p className="text-xs text-muted-foreground">
               Draft was written in <span className="text-foreground">{draftLanguage}</span>.
@@ -407,12 +407,12 @@ export function CopilotPanel({ seed }: { seed: CopilotSeed | null }) {
         ) : null}
 
         {audioBase64 ? (
-          <div className="space-y-3 border-t border-white/10 pt-4">
+          <div className="space-y-3 border-t border-border pt-4">
             <p className="text-sm font-medium text-foreground">Preview</p>
             <audio controls className="w-full" src={`data:audio/wav;base64,${audioBase64}`} />
             <PublishButton onClick={publish} upload={upload} />
             {upload.isSuccess ? (
-              <p className="text-sm text-emerald-400">
+              <p className="text-sm text-success">
                 Published! Find it under “Newly Released” on the home page.
               </p>
             ) : null}

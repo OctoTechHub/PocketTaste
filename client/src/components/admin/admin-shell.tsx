@@ -120,7 +120,7 @@ function PipelineSection() {
             <span className="text-xs text-muted-foreground">POST /pipeline/run (llm off)</span>
           </div>
 
-          <div className="rounded-xl border border-white/10 p-4">
+          <div className="rounded-xl border border-border p-4">
             <div className="flex items-center justify-between">
               <p className="text-sm font-medium">Scheduler</p>
               <Pill tone={sched.enabled ? "good" : "neutral"}>
@@ -152,7 +152,7 @@ function PipelineSection() {
           ) : runList.length ? (
             <ul className="space-y-2 text-sm">
               {runList.map((r, i) => (
-                <li key={i} className="flex items-center justify-between gap-2 border-b border-white/5 pb-2">
+                <li key={i} className="flex items-center justify-between gap-2 border-b border-border/60 pb-2">
                   <span className="truncate font-mono text-xs text-muted-foreground">
                     {str(r.run_id, `run ${i + 1}`)}
                   </span>

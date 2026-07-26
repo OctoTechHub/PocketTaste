@@ -14,12 +14,12 @@ const LINKS = [
 
 export function SiteFooter() {
   return (
-    <footer className="mt-8 px-4 py-10 text-sm text-white/50 sm:px-12">
+    <footer className="mt-8 px-4 py-10 text-sm text-muted-foreground sm:px-12">
       <p className="mb-6">Questions? Call 000-800-000-0000</p>
       <ul className="grid max-w-3xl grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-3 md:grid-cols-4">
         {LINKS.map((link) => (
           <li key={link}>
-            <a href="#" className="transition-colors hover:text-white/80 hover:underline">
+            <a href="#" className="transition-colors hover:text-foreground hover:underline">
               {link}
             </a>
           </li>
