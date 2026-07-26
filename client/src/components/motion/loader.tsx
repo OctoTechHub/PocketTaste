@@ -2,9 +2,10 @@
 // beui.dev/components/motion/loader
 /* eslint-disable react-hooks/set-state-in-effect -- vendored beui component; interval-driven frame tickers are intentional. */
 
-import { motion, useReducedMotion } from "motion/react";
+import { motion } from "motion/react";
 import { useEffect, useId, useState } from "react";
 import { EASE_IN_OUT } from "@/lib/ease";
+import { useSafeReducedMotion } from "@/lib/hooks/use-reduced-motion";
 import { cn } from "@/lib/utils";
 
 export type LoaderVariant =
@@ -60,7 +61,7 @@ export function Loader({
   label = "Loading",
   className,
 }: LoaderProps) {
-  const reduce = useReducedMotion() ?? false;
+  const reduce = useSafeReducedMotion();
 
   return (
     <span

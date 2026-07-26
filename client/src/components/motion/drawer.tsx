@@ -1,9 +1,10 @@
 "use client";
 // beui.dev/components/motion/drawer
 
-import { AnimatePresence, motion, useReducedMotion } from "motion/react";
+import { AnimatePresence, motion } from "motion/react";
 import { useEffect, type ReactNode } from "react";
 import { EASE_OUT, SPRING_PANEL } from "@/lib/ease";
+import { useSafeReducedMotion } from "@/lib/hooks/use-reduced-motion";
 import { cn } from "@/lib/utils";
 
 export interface DrawerProps {
@@ -30,7 +31,7 @@ export function Drawer({
   ariaLabel,
   dismissable = true,
 }: DrawerProps) {
-  const reduce = useReducedMotion();
+  const reduce = useSafeReducedMotion();
 
   useEffect(() => {
     if (!open) return;

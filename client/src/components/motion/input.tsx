@@ -1,12 +1,7 @@
 "use client";
 // beui.dev/components/motion/input
 
-import {
-  AnimatePresence,
-  animate,
-  motion,
-  useReducedMotion,
-} from "motion/react";
+import { AnimatePresence, animate, motion } from "motion/react";
 import {
   forwardRef,
   useEffect,
@@ -16,6 +11,7 @@ import {
   type InputHTMLAttributes,
   type ReactNode,
 } from "react";
+import { useSafeReducedMotion } from "@/lib/hooks/use-reduced-motion";
 import { cn } from "@/lib/utils";
 
 export type InputClassNames = {
@@ -69,7 +65,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
 ) {
   const reactId = useId();
   const id = idProp ?? reactId;
-  const reduce = useReducedMotion();
+  const reduce = useSafeReducedMotion();
 
   const controlled = valueProp !== undefined;
   const [internal, setInternal] = useState(defaultValue ?? "");

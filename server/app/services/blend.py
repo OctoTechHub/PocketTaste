@@ -38,7 +38,9 @@ can show the attribution rather than asserting that the feed is fair.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
+from time import perf_counter
 
 from app.core.config import Settings
 from app.core.logging import get_logger
@@ -173,22 +175,65 @@ class BlendService:
         limit: int = 18,
         alpha: float = DEFAULT_ALPHA,
         language: str | None = None,
+        on_stage: Callable[[str, str, dict], None] | None = None,
     ) -> dict:
+        """`on_stage(step, message, detail)` fires as each stage actually completes.
+
+        The counts it reports are the real ones — how many candidates survived, how
+        many items each member was scored against, how many the representation pass
+        moved. Nothing here is a progress animation timed to look busy.
+        """
+        started = perf_counter()
+
+        def stage(step: str, message: str, **detail) -> None:
+            if on_stage is not None:
+                on_stage(step, message, {**detail, "elapsed_ms": round((perf_counter() - started) * 1000)})
+
         if len(members) != 2:
             raise ValueError("A blend is between exactly two listeners.")
         first, second = members
+        stage(
+            "members",
+            f"Reading {first.display_name} and {second.display_name}",
+            events=[member.profile.events_observed for member in members],
+        )
 
         candidates = self._candidate_pool(members, context, language)
+        stage(
+            "candidates",
+            f"{len(candidates)} candidates after removing what you have both finished",
+            candidates=len(candidates),
+            catalog=len(context.catalog),
+            suppressed=len(context.suppressed),
+        )
         if not candidates:
+            stage("done", "Nothing left to recommend")
             return self._empty(members, alpha)
 
         # Score every candidate for each member with the production ranker, then
         # normalise within member so the two columns are comparable.
-        raw = {
-            member.user_id: self._ranking.score_for(member.profile, candidates, context)
-            for member in members
-        }
+        raw: dict[str, dict[str, float]] = {}
+        for member in members:
+            raw[member.user_id] = self._ranking.score_for(member.profile, candidates, context)
+            stage(
+                "score",
+                f"Scored {len(candidates)} stories for {member.display_name}",
+                user_id=member.user_id,
+                display_name=member.display_name,
+                signals=8,
+            )
+
         normalised = {user_id: _normalise(scores) for user_id, scores in raw.items()}
+        stage(
+            "normalise",
+            "Rescaled both score columns so neither listener outweighs the other",
+            spans={
+                member.display_name: round(
+                    max(raw[member.user_id].values()) - min(raw[member.user_id].values()), 4
+                )
+                for member in members
+            },
+        )
 
         scored: list[BlendedItem] = []
         for item in candidates:
@@ -214,7 +259,27 @@ class BlendService:
                 )
             )
 
-        selected = self._select_with_representation(scored, members, limit)
+        shared_count = sum(1 for entry in scored if entry.owner == "shared")
+        stage(
+            "combine",
+            f"Blended at {alpha:.2f} mean + {1 - alpha:.2f} least-misery",
+            shared=shared_count,
+            scored=len(scored),
+        )
+
+        forced: list[str] = []
+        selected = self._select_with_representation(scored, members, limit, forced)
+        stage(
+            "select",
+            (
+                f"Picked {len(selected)}; {len(forced)} slot(s) handed to the "
+                "under-represented listener"
+                if forced
+                else f"Picked {len(selected)}; both of you were already represented"
+            ),
+            forced=len(forced),
+        )
+        stage("done", "Blend ready")
         return self._render(selected, members, context, alpha, len(candidates))
 
     # --- candidate pool -----------------------------------------------------
@@ -243,7 +308,11 @@ class BlendService:
     # --- selection ----------------------------------------------------------
 
     def _select_with_representation(
-        self, scored: list[BlendedItem], members: list[BlendMember], limit: int
+        self,
+        scored: list[BlendedItem],
+        members: list[BlendMember],
+        limit: int,
+        forced: list[str] | None = None,
     ) -> list[BlendedItem]:
         """Greedy by blended score, with a floor on each member's representation.
 
@@ -276,6 +345,8 @@ class BlendService:
                 pick = pick or next(
                     (entry for entry in pool if entry.owner == "shared"), None
                 )
+                if pick is not None and forced is not None:
+                    forced.append(owed)
             pick = pick or pool[0]
 
             pool.remove(pick)

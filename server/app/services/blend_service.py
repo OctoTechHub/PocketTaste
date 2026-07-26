@@ -88,17 +88,47 @@ class BlendApplicationService:
     async def describe(self, blend_id: str, *, viewer_id: str) -> dict:
         return await self._describe(await self.get(blend_id, viewer_id=viewer_id), viewer_id)
 
-    async def feed(self, blend_id: str, *, viewer_id: str, context, limit: int, language=None) -> dict:
+    async def prepare(self, blend_id: str, *, viewer_id: str) -> tuple[Blend, list[BlendMember]]:
+        """The database half of building a feed, kept separate from the scoring half.
+
+        Scoring is CPU-bound and the streaming endpoint runs it on a worker thread so
+        the event loop stays free to flush events. Mongo cannot go with it: the async
+        client binds to the loop it was created on and raises `Cannot use
+        AsyncMongoClient in different event loop` the moment another one touches it.
+        So all the awaiting happens here, on the request's own loop, and the thread
+        receives plain objects.
+        """
         blend = await self.get(blend_id, viewer_id=viewer_id)
-        members = await self._members(blend, viewer_id=viewer_id)
-        result = self._algorithm.blend(members, context, limit=limit, language=language)
-        await self._blends.upsert(blend.model_copy(update={"last_viewed_at": utcnow()}))
+        return blend, await self._members(blend, viewer_id=viewer_id)
+
+    def compose(self, blend: Blend, members: list[BlendMember], result: dict, viewer_id: str) -> dict:
+        """Pure assembly of the response. No I/O, safe to call from anywhere."""
         return {
             "blend_id": blend.blend_id,
             "members": [self._member_payload(member, viewer_id) for member in members],
             "taste_match": taste_match(members[0].profile, members[1].profile),
             **result,
         }
+
+    async def mark_viewed(self, blend: Blend) -> None:
+        await self._blends.upsert(blend.model_copy(update={"last_viewed_at": utcnow()}))
+
+    async def feed(
+        self,
+        blend_id: str,
+        *,
+        viewer_id: str,
+        context,
+        limit: int,
+        language=None,
+        on_stage=None,
+    ) -> dict:
+        blend, members = await self.prepare(blend_id, viewer_id=viewer_id)
+        result = self._algorithm.blend(
+            members, context, limit=limit, language=language, on_stage=on_stage
+        )
+        await self.mark_viewed(blend)
+        return self.compose(blend, members, result, viewer_id)
 
     # --- internals ----------------------------------------------------------
 

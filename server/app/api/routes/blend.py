@@ -2,11 +2,17 @@
 
 from __future__ import annotations
 
+import asyncio
+import json
+
 from fastapi import APIRouter, Query, status
+from fastapi.responses import StreamingResponse
 
 from app.api.deps import CurrentAccount, StorageDep
+from app.core.logging import get_logger
 from app.domain.schemas import BlendCreate
 
+logger = get_logger(__name__)
 router = APIRouter(prefix="/blend", tags=["blend"])
 
 
@@ -50,6 +56,73 @@ async def blend_feed(
         context=context,
         limit=limit,
         language=language,
+    )
+
+
+@router.get("/{blend_id}/feed/stream", summary="The blended feed, streamed stage by stage")
+async def blend_feed_stream(
+    blend_id: str,
+    container: StorageDep,
+    account: CurrentAccount,
+    limit: int = Query(default=18, ge=1, le=50),
+    language: str | None = Query(default=None),
+) -> StreamingResponse:
+    """Server-sent events: one `stage` per step of the algorithm, then `result`.
+
+    The stages are emitted by the algorithm as each one finishes, carrying the real
+    counts — candidates surviving the pool filter, items scored per member, slots the
+    representation pass had to reassign. Scoring runs in a worker thread so the event
+    loop keeps flushing events while it works; without that the whole stream would
+    arrive at once at the end and there would be nothing to watch.
+    """
+    context = await container.cache.get()
+    # Every database read happens here, on the request's own loop. The worker thread
+    # below gets plain objects only -- the async Mongo client binds to the loop it was
+    # created on and raises if a second loop touches it.
+    blend, members = await container.blend_service.prepare(blend_id, viewer_id=account.user_id)
+
+    loop = asyncio.get_running_loop()
+    queue: asyncio.Queue[dict | None] = asyncio.Queue()
+
+    def on_stage(step: str, message: str, detail: dict) -> None:
+        loop.call_soon_threadsafe(
+            queue.put_nowait, {"type": "stage", "step": step, "message": message, **detail}
+        )
+
+    async def run() -> None:
+        try:
+            result = await asyncio.to_thread(
+                container.blend_algorithm.blend,
+                members,
+                context,
+                limit=limit,
+                language=language,
+                on_stage=on_stage,
+            )
+            payload = container.blend_service.compose(blend, members, result, account.user_id)
+            await container.blend_service.mark_viewed(blend)
+            await queue.put({"type": "result", **payload})
+        except Exception as exc:  # noqa: BLE001 - the stream must report, not hang
+            logger.exception("Blend stream failed for %s", blend_id)
+            await queue.put({"type": "error", "message": str(exc)})
+        finally:
+            await queue.put(None)
+
+    async def events():
+        task = asyncio.create_task(run())
+        try:
+            while True:
+                payload = await queue.get()
+                if payload is None:
+                    break
+                yield f"data: {json.dumps(payload, default=str)}\n\n"
+        finally:
+            task.cancel()
+
+    return StreamingResponse(
+        events(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
 
 

@@ -23,6 +23,19 @@ copy .env.example .env        # then fill in DB_URL, OPENAI_KEY, JWT_SECRET
 
 Open **<http://127.0.0.1:8000/docs>**.
 
+> Keep `--reload`. Without it the process holds the modules it imported at boot, so
+> edits appear to have no effect and you debug code that is not running. On Windows
+> this compounds: a second `uvicorn` cannot bind a port the first one still holds, so
+> it logs `[Errno 10048]` and exits while the old build keeps answering. If behaviour
+> disagrees with the source, check the process start time against the file's
+> `LastWriteTime` before changing anything:
+>
+> ```powershell
+> Get-CimInstance Win32_Process -Filter "Name='python.exe'" |
+>   Where-Object { $_.CommandLine -match 'uvicorn' } |
+>   Select-Object ProcessId, CreationDate
+> ```
+
 Check it came up healthy:
 
 ```bash
