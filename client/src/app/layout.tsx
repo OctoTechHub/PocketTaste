@@ -2,7 +2,9 @@ import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 
+import { InlineScript } from "@/components/inline-script";
 import { AppProviders } from "@/components/providers/app-providers";
+import { THEME_KEY } from "@/lib/theme";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -24,8 +26,8 @@ export const viewport: Viewport = {
 };
 
 // Applies the saved theme before first paint, so switching to dark never flashes
-// the light palette on reload.
-const themeInit = `try{if(localStorage.getItem('bolsillo.theme')==='dark'){document.documentElement.classList.add('dark');}}catch(e){}`;
+// the light palette on reload. Runs in <head>, ahead of any body content.
+const themeInit = `try{if(localStorage.getItem(${JSON.stringify(THEME_KEY)})==='dark'){document.documentElement.classList.add('dark');}}catch(e){}`;
 
 export default function RootLayout({
   children,
@@ -33,12 +35,17 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
+    // The script adds `dark` to this element's class list before hydration, so
+    // React must accept the DOM's className over the one it rendered.
     <html
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      suppressHydrationWarning
     >
+      <head>
+        <InlineScript html={themeInit} />
+      </head>
       <body className="min-h-full flex flex-col">
-        <script dangerouslySetInnerHTML={{ __html: themeInit }} />
         <AppProviders>{children}</AppProviders>
       </body>
     </html>

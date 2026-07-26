@@ -2,8 +2,9 @@
 
 import { useCallback, useEffect, useState } from "react";
 
-export type Theme = "light" | "dark";
-export const THEME_KEY = "bolsillo.theme";
+import { THEME_KEY, type Theme } from "@/lib/theme";
+
+export { THEME_KEY, type Theme };
 
 /**
  * Reads/toggles the app theme. The `dark` class on <html> is what flips the
