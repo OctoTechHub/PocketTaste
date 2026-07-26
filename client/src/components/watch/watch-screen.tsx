@@ -15,7 +15,7 @@ import { contentToItem } from "@/lib/api/mappers";
  * and same-genre catalog entries for the recommendations rail. No mock data.
  */
 export function WatchScreen({ id }: { id: string }) {
-  const { data, isLoading, isError, error } = useContent(id);
+  const { data, isLoading, isError } = useContent(id);
 
   const primaryGenre = data?.content.genres[0];
   // Related titles from the same genre; falls back to a broad slice.
@@ -54,9 +54,8 @@ export function WatchScreen({ id }: { id: string }) {
         <div className="flex min-h-[60vh] flex-col items-center justify-center gap-3 px-6 text-center">
           <p className="text-lg font-semibold text-foreground">Story not found</p>
           <p className="max-w-md text-sm text-muted-foreground">
-            {error instanceof Error
-              ? error.message
-              : `No catalog item with id “${id}”.`}
+            This story isn’t in the catalog — it may have been unpublished, or the
+            link may be out of date.
           </p>
           <Link
             href="/"

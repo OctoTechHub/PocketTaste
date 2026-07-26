@@ -1,6 +1,6 @@
 "use client";
 
-import { PenLine } from "lucide-react";
+import { Compass, PenLine, Search, ShieldCheck } from "lucide-react";
 
 import { Loader } from "@/components/motion/loader";
 import { useCreatorOpportunities } from "@/hooks/api/use-creator";
@@ -33,6 +33,7 @@ export function OpportunitiesPanel({
   if (isError || !data) {
     return (
       <EmptyState
+        icon={Compass}
         title="Gathering your opportunities"
         hint="We’re still learning what your audience wants. Check back once there’s a little more listening activity."
       />
@@ -67,7 +68,11 @@ export function OpportunitiesPanel({
             ))}
           </div>
         ) : (
-          <EmptyState title="No under-served segments found." />
+          <EmptyState
+            icon={Search}
+            title="No under-served segments found"
+            hint="Every segment you could reach already has supply. Check back as demand shifts."
+          />
         )}
       </section>
 
@@ -80,7 +85,11 @@ export function OpportunitiesPanel({
             ))}
           </div>
         ) : (
-          <EmptyState title="Nothing flagged for re-execution." />
+          <EmptyState
+            icon={ShieldCheck}
+            title="Nothing flagged for re-execution"
+            hint="No published story is under-performing its segment right now."
+          />
         )}
       </section>
 

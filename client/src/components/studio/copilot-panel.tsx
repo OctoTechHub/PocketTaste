@@ -400,7 +400,7 @@ export function CopilotPanel({ seed }: { seed: CopilotSeed | null }) {
             </Button>
             {narrate.isError ? (
               <p className="text-sm text-destructive">
-                {narrate.error instanceof Error ? narrate.error.message : "Narration failed."}
+                Narration didn’t finish. Try converting again.
               </p>
             ) : null}
           </div>

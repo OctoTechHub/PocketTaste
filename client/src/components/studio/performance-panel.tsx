@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronDown } from "lucide-react";
+import { BarChart3, ChevronDown, FilePlus2 } from "lucide-react";
 import { useState } from "react";
 
 import { Loader } from "@/components/motion/loader";
@@ -35,6 +35,7 @@ export function PerformancePanel() {
   if (isError || !data) {
     return (
       <EmptyState
+        icon={BarChart3}
         title="Your performance will appear here"
         hint="Once your stories start getting listens, you’ll see retention and drop-off for each one."
       />
@@ -47,6 +48,7 @@ export function PerformancePanel() {
   if (num(d.catalog_items) === 0) {
     return (
       <EmptyState
+        icon={FilePlus2}
         title="You haven’t published anything yet"
         hint="Use the Upload tab to add your first story."
       />

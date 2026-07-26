@@ -9,7 +9,7 @@ import { useTranscript } from "@/hooks/api/use-catalog";
 /** Collapsible transcript for a story — GET /catalog/{id}/transcript, fetched on open. */
 export function TranscriptSection({ contentId }: { contentId: string }) {
   const [open, setOpen] = useState(false);
-  const { data, isLoading, isError, error } = useTranscript(contentId, open);
+  const { data, isLoading, isError } = useTranscript(contentId, open);
 
   return (
     <div className="mt-4 rounded-xl border border-border bg-muted/40">
@@ -30,7 +30,7 @@ export function TranscriptSection({ contentId }: { contentId: string }) {
             </div>
           ) : isError ? (
             <p className="text-sm text-muted-foreground">
-              {error instanceof Error ? error.message : "Transcript unavailable."}
+              No transcript for this story yet.
             </p>
           ) : (
             <p className="max-h-80 overflow-auto whitespace-pre-wrap text-sm leading-relaxed text-foreground/80">

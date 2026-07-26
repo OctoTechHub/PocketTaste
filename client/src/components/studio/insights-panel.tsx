@@ -1,5 +1,7 @@
 "use client";
 
+import { Activity, LineChart, Radar } from "lucide-react";
+
 import { Loader } from "@/components/motion/loader";
 import { useBriefs, useDemand, useSaturation } from "@/hooks/api/use-creator";
 import { DemandChart, DemandTrendChart, SaturationChart } from "./insights-charts";
@@ -33,6 +35,7 @@ export function InsightsPanel() {
   if (demand.isError) {
     return (
       <EmptyState
+        icon={Radar}
         title="Audience insights are on the way"
         hint="Once there’s enough listening across the catalog, demand and saturation land here."
       />
@@ -81,7 +84,11 @@ export function InsightsPanel() {
             </table>
           </div>
         ) : (
-          <EmptyState title="No segments measured yet." />
+          <EmptyState
+            icon={Activity}
+            title="No segments measured yet"
+            hint="Demand is computed from listening events. The first ones haven’t landed."
+          />
         )}
       </section>
 
@@ -95,7 +102,11 @@ export function InsightsPanel() {
             <DemandTrendChart segments={segments} />
           </Card>
         ) : (
-          <EmptyState title="No retention data yet." />
+          <EmptyState
+            icon={LineChart}
+            title="No retention data yet"
+            hint="Completion and drop-off appear once stories have been played end to end."
+          />
         )}
       </section>
 

@@ -6,6 +6,7 @@
 // the loosely-typed (JsonRecord) API payloads.
 
 import { motion, useReducedMotion } from "motion/react";
+import { Inbox } from "lucide-react";
 import type { ComponentType, ReactNode } from "react";
 
 import CountUp from "@/components/CountUp";
@@ -32,7 +33,9 @@ export function friendlyError(_err?: unknown, fallback = "Couldn’t load this j
   return fallback;
 }
 
-const SPOTLIGHT = "rgba(250, 204, 21, 0.15)" as const;
+// The cursor spotlight has to be the ochre, not the yellow: yellow at 15% over
+// a white card is invisible, so the effect simply stopped existing on paper.
+const SPOTLIGHT = "rgba(165, 99, 0, 0.10)" as const;
 
 // --- motion reveal ----------------------------------------------------------
 
@@ -202,11 +205,38 @@ export function Meter({ value, tone = "primary" }: { value: number; tone?: "prim
   );
 }
 
-export function EmptyState({ title, hint }: { title: string; hint?: string }) {
+/**
+ * An empty state is a place the product is *waiting*, not a place it broke.
+ * On paper, two lines of grey text in a white card read as a blank page — so
+ * every state gets a mark: an icon in a tinted tile, one line naming what will
+ * appear here, and where useful something to press. Never a status code.
+ */
+export function EmptyState({
+  icon: Icon = Inbox,
+  title,
+  hint,
+  action,
+}: {
+  icon?: ComponentType<{ className?: string }>;
+  title: string;
+  hint?: string;
+  action?: ReactNode;
+}) {
   return (
-    <Card className="text-center" spotlight={false}>
+    <Card className="flex flex-col items-center px-6 py-10 text-center" spotlight={false}>
+      <span
+        aria-hidden
+        className="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10 text-primary ring-1 ring-inset ring-primary/15"
+      >
+        <Icon className="h-5 w-5" />
+      </span>
       <p className="font-semibold text-foreground">{title}</p>
-      {hint ? <p className="mt-1 text-sm text-muted-foreground">{hint}</p> : null}
+      {hint ? (
+        <p className="mt-1.5 max-w-sm text-pretty text-sm leading-relaxed text-muted-foreground">
+          {hint}
+        </p>
+      ) : null}
+      {action ? <div className="mt-5">{action}</div> : null}
     </Card>
   );
 }

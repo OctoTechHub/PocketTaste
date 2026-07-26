@@ -1,9 +1,10 @@
 "use client";
 
 import { AnimatePresence, motion } from "motion/react";
-import { BarChart3, Lightbulb, PenLine, Sparkles, Upload } from "lucide-react";
+import { BarChart3, Lightbulb, LockKeyhole, PenLine, Sparkles, Upload } from "lucide-react";
 import { useRef, useState, type ComponentType } from "react";
 
+import { AuthDrawer } from "@/components/auth/auth-drawer";
 import { SiteHeader } from "@/components/site-header";
 import { useAuth } from "@/hooks/api/use-auth";
 import { CopilotPanel } from "./copilot-panel";
@@ -11,7 +12,7 @@ import { InsightsPanel } from "./insights-panel";
 import { OpportunitiesPanel } from "./opportunities-panel";
 import { PerformancePanel } from "./performance-panel";
 import { UploadPanel } from "./upload-panel";
-import { Card, TabHeader } from "./ui";
+import { EmptyState, TabHeader } from "./ui";
 
 type TabId = "opportunities" | "performance" | "upload" | "copilot" | "insights";
 
@@ -76,6 +77,7 @@ export function StudioShell() {
   const { isAuthenticated, account } = useAuth();
   const [tab, setTab] = useState<TabId>("opportunities");
   const [copilotSeed, setCopilotSeed] = useState<CopilotSeed | null>(null);
+  const [authOpen, setAuthOpen] = useState(false);
   const seedCounter = useRef(0);
   const current = TABS.find((t) => t.id === tab)!;
 
@@ -99,13 +101,21 @@ export function StudioShell() {
         </header>
 
         {!isAuthenticated ? (
-          <Card className="text-center" spotlight={false}>
-            <p className="font-semibold text-foreground">Sign in to open your studio</p>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Use “Sign in” in the top-right. Opportunities, performance and uploads are tied
-              to your creator account.
-            </p>
-          </Card>
+          <EmptyState
+            icon={LockKeyhole}
+            title="Sign in to open your studio"
+            hint="Opportunities, performance and uploads are tied to your creator account, so the studio stays empty until we know who you are."
+            action={
+              <button
+                type="button"
+                onClick={() => setAuthOpen(true)}
+                className="inline-flex min-h-11 items-center gap-2 rounded-full bg-primary px-5 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+              >
+                <LockKeyhole className="h-4 w-4" />
+                Sign in
+              </button>
+            }
+          />
         ) : (
           <>
             {/* Animated segmented tabs with a gliding indicator */}
@@ -158,6 +168,7 @@ export function StudioShell() {
           </>
         )}
       </main>
+      <AuthDrawer open={authOpen} onOpenChange={setAuthOpen} />
     </div>
   );
 }

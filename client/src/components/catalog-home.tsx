@@ -1,6 +1,7 @@
 "use client";
 
 import { Fragment } from "react";
+import { WifiOff } from "lucide-react";
 
 import { Billboard } from "@/components/billboard";
 import { ChannelMarquee } from "@/components/channel-marquee";
@@ -9,10 +10,11 @@ import { ForYouRow } from "@/components/for-you-row";
 import { NewReleasesRow } from "@/components/new-releases-row";
 import { Loader } from "@/components/motion/loader";
 import { useCatalogRows } from "@/hooks/api/use-catalog";
+import { hero as sampleHero, rows as sampleRows } from "@/data/catalog";
 
 /** The home feed, entirely from GET /catalog — hero + genre shelves. */
 export function CatalogHome() {
-  const { data, isLoading, isError, error } = useCatalogRows();
+  const { data, isLoading, isError } = useCatalogRows();
 
   if (isLoading) {
     return (
@@ -23,26 +25,31 @@ export function CatalogHome() {
     );
   }
 
-  if (isError || !data || !data.hero) {
-    return (
-      <div className="flex min-h-[70vh] flex-col items-center justify-center gap-3 px-6 text-center">
-        <p className="text-lg font-semibold text-foreground">
-          Couldn’t load the catalog
-        </p>
-        <p className="max-w-md text-sm text-muted-foreground">
-          {error instanceof Error
-            ? error.message
-            : "Is the API server running on http://127.0.0.1:8000?"}
-        </p>
-      </div>
-    );
-  }
+  // A dead API used to leave the home page as a bare error string. It now falls
+  // back to the catalog bundled with the client so the app is still walkable —
+  // but says so plainly, because sample shelves must never be mistaken for the
+  // live catalog.
+  const offline = isError || !data || !data.hero;
+  const { rows, hero } = offline
+    ? { rows: sampleRows, hero: sampleHero }
+    : { rows: data.rows, hero: data.hero! };
 
-  const { rows, hero } = data;
   const collections = rows.map((row) => row.label);
 
   return (
     <>
+      {offline ? (
+        <div
+          role="status"
+          className="fixed inset-x-0 top-14 z-40 mx-auto flex w-fit max-w-[92vw] items-center gap-2.5 rounded-full border border-border bg-card px-4 py-2 text-sm shadow-lift"
+        >
+          <WifiOff aria-hidden className="h-4 w-4 shrink-0 text-primary" />
+          <span className="text-foreground">
+            Showing the bundled sample catalog — the API isn’t reachable.
+          </span>
+        </div>
+      ) : null}
+
       <Billboard hero={hero} />
 
       {/* Rows overlap the hero's lower gradient, Netflix-style */}
