@@ -208,7 +208,7 @@ function VideoDetails({ video }: { video: ContentItem }) {
         className="mt-4 rounded-xl bg-muted p-4 text-sm"
       >
         <p className="font-medium text-foreground">
-          {video.views || "Trending"} &nbsp;·&nbsp; Featured on StreamHub
+          {video.views || "Trending"} &nbsp;·&nbsp; Featured on Bolsillo
         </p>
         <p className="mt-2 text-muted-foreground">
           Now playing <span className="text-foreground">{video.name}</span> from{" "}

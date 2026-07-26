@@ -80,7 +80,7 @@ export function AuthDrawer({
         </button>
 
         <p className="text-xs font-black uppercase tracking-[0.2em] text-primary">
-          StreamHub
+          Bolsillo
         </p>
         <h2 className="mt-2 text-2xl font-bold text-foreground">
           {mode === "login" ? "Welcome back" : "Create your account"}

@@ -32,7 +32,7 @@ export function friendlyError(_err?: unknown, fallback = "Couldn’t load this j
   return fallback;
 }
 
-const SPOTLIGHT = "rgba(168, 85, 247, 0.16)" as const;
+const SPOTLIGHT = "rgba(250, 204, 21, 0.15)" as const;
 
 // --- motion reveal ----------------------------------------------------------
 
@@ -101,7 +101,7 @@ export function TabHeader({
         <Icon className="h-5 w-5" />
       </span>
       <div>
-        <ShinyText text={title} speed={4} className="text-xl font-bold" color="#e7e7ff" shineColor="#ffffff" />
+        <ShinyText text={title} speed={4} className="text-xl font-bold" color="#f5f5f4" shineColor="#facc15" />
         <p className="text-sm text-muted-foreground">{subtitle}</p>
       </div>
     </div>

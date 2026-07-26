@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Bell, LogOut, Search } from "lucide-react";
+import { AudioLines, Bell, LogOut, Search } from "lucide-react";
 import { useState } from "react";
 
 import { cn } from "@/lib/utils";
@@ -35,11 +35,13 @@ export function SiteHeader() {
       )}
     >
       <div className="flex items-center gap-6 px-4 py-3 sm:px-12">
-        <Link
-          href="/"
-          className="select-none text-2xl font-black uppercase tracking-tight text-primary"
-        >
-          StreamHub
+        <Link href="/" className="flex select-none items-center gap-2">
+          <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-[0_0_18px_-2px_var(--color-primary)]">
+            <AudioLines className="h-5 w-5" strokeWidth={2.75} />
+          </span>
+          <span className="text-2xl font-black tracking-tight text-foreground">
+            Bolsillo
+          </span>
         </Link>
 
         <nav className="hidden items-center gap-5 text-sm text-white/80 md:flex">
